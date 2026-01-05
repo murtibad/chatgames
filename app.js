@@ -405,51 +405,44 @@ function updateLivesDisplay() {
 
 function startGame() {
 
-function showCountdown() {
-    const overlay = document.getElementById('countdownOverlay');
-    const text = document.getElementById('countdownText');
-    
-    if (!overlay || !text) {
-        // Fallback if elements missing
-        gameState.isGameActive = true;
-        gameState.animationFrameId = requestAnimationFrame(gameLoop);
-        return;
-    }
-    
-    text.textContent = '3';
-    text.style.color = '#25F4EE';
-    overlay.style.display = 'flex';
-    let count = 3;
-    text.textContent = count;
-    
-    const interval = setInterval(() => {
-        count--;
-        
-        if (count > 0) {
-            text.textContent = count;
-        } else if (count === 0) {
-            text.textContent = 'GO!';
-            text.style.color = '#10b981';
-        } else {
-            // Countdown finished
-            clearInterval(interval);
-            overlay.style.display = 'none';
-            
-            // NOW start the game
+    function showCountdown() {
+        const overlay = document.getElementById('countdownOverlay');
+        const text = document.getElementById('countdownText');
+
+        if (!overlay || !text) {
+            // Fallback if elements missing
             gameState.isGameActive = true;
-            gameState.lastSpawnTime = performance.now();
             gameState.animationFrameId = requestAnimationFrame(gameLoop);
+            return;
         }
-    }, 1000);
-}, 1000);
-    
-    function animate() {
-        if (!gameState.isGameActive || gameState.floatingTexts.length > 0) {
-            requestAnimationFrame(animate);
-        }
+
+        text.textContent = '3';
+        text.style.color = '#25F4EE';
+        overlay.style.display = 'flex';
+        let count = 3;
+        text.textContent = count;
+
+        const interval = setInterval(() => {
+            count--;
+
+            if (count > 0) {
+                text.textContent = count;
+            } else if (count === 0) {
+                text.textContent = 'GO!';
+                text.style.color = '#10b981';
+            } else {
+                // Countdown finished
+                clearInterval(interval);
+                overlay.style.display = 'none';
+
+                // NOW start the game
+                gameState.isGameActive = true;
+                gameState.lastSpawnTime = performance.now();
+                gameState.animationFrameId = requestAnimationFrame(gameLoop);
+            }
+        }, 1000);
     }
-    animate();
-}
+
 
     if (videoElement.readyState < 2) {
         setTimeout(startGame, 100);
