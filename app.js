@@ -1,10 +1,10 @@
-// v0.9.5 JUICY UPDATE - app.js
+// v0.9.6 FINAL PREMIUM - app.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-console.log("💎 JUICY MODE v0.9.5 INITIALIZED (REFINED)");
+console.log("💎 v0.9.6 FINAL PREMIUM INITIALIZED");
 
-// --- 1. FIREBASE CONFIG ---
+// === FIREBASE CONFIG ===
 const CONFIG = {
     apiKey: "AIzaSyBJqIfScXLNKWiaVylgKHlvuVbeT1rEOk8",
     authDomain: "chatgames-4b61b.firebaseapp.com",
@@ -18,12 +18,93 @@ let db;
 try {
     const app = initializeApp(CONFIG);
     db = getFirestore(app);
-    console.log("Firebase initialized.");
+    console.log("✓ Firebase Connected");
 } catch (e) {
-    console.warn("Firebase Offline Mode:", e);
+    console.warn("Firebase Offline:", e);
 }
 
-// --- 2. DOM & UTILS ---
+// === PRE-RENDERED SPRITES (PERFORMANCE OPTIMIZATION) ===
+const diamondSprite = document.createElement('canvas');
+const bombSprite = document.createElement('canvas');
+const spriteSize = 64;
+
+function preRenderDiamond() {
+    diamondSprite.width = spriteSize;
+    diamondSprite.height = spriteSize;
+    const ctx = diamondSprite.getContext('2d');
+    const cx = spriteSize / 2;
+    const cy = spriteSize / 2;
+    const size = spriteSize / 2.5;
+
+    // Outer Glow
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "rgba(0, 255, 255, 0.8)";
+
+    // Diamond Shape
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size);
+    ctx.lineTo(cx + size, cy);
+    ctx.lineTo(cx, cy + size);
+    ctx.lineTo(cx - size, cy);
+    ctx.closePath();
+
+    // 3D Gradient Fill
+    const gradient = ctx.createRadialGradient(cx, cy - 5, 0, cx, cy, size);
+    gradient.addColorStop(0, "#E0FFFF");
+    gradient.addColorStop(0.5, "#00FFFF");
+    gradient.addColorStop(1, "#008B8B");
+
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Edge Highlight
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+}
+
+function preRenderBomb() {
+    bombSprite.width = spriteSize;
+    bombSprite.height = spriteSize;
+    const ctx = bombSprite.getContext('2d');
+    const cx = spriteSize / 2;
+    const cy = spriteSize / 2;
+    const radius = spriteSize / 3;
+
+    // Bomb Body
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "rgba(255, 0, 80, 0.8)";
+
+    const gradient = ctx.createRadialGradient(cx - 5, cy - 5, 0, cx, cy, radius);
+    gradient.addColorStop(0, "#FF6B9D");
+    gradient.addColorStop(1, "#C9184A");
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Fuse
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - radius);
+    ctx.lineTo(cx, cy - radius - 10);
+    ctx.stroke();
+
+    // Spark
+    ctx.fillStyle = "#FFD700";
+    ctx.beginPath();
+    ctx.arc(cx, cy - radius - 12, 3, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+preRenderDiamond();
+preRenderBomb();
+
+// === DOM ELEMENTS ===
 const getEl = (id) => {
     const el = document.getElementById(id);
     if (!el) console.warn(`Missing: #${id}`);
@@ -39,26 +120,30 @@ const D = {
     leaderboard: getEl('leaderboard-screen'),
     scoreHud: getEl('score-hud'),
     scoreVal: getEl('score-val'),
-    livesDisplay: document.getElementById('lives-display') || { innerText: '' }, // Fail-safe
+    livesDisplay: getEl('lives-display'),
     overlay: getEl('countdown-overlay'),
     countText: getEl('countdown-text'),
     username: getEl('username-input'),
     saveMsg: getEl('save-msg'),
     saveBtn: getEl('btn-save'),
+    shareBtn: getEl('btn-share'),
     muteBtn: getEl('mute-btn'),
     list: getEl('leaderboard-list')
 };
 
-// --- 3. GAME STATE ---
-const gameState = {
+// === GAME STATE ===
+const State = {
     isGameActive: false,
     score: 0,
     lives: 3,
+    combo: 0, // NEW: Combo system
     speedMultiplier: 1.0,
+    bombChance: 0.35, // NEW: Dynamic bomb chance
     lastSpawnTime: 0,
     spawnInterval: 1200,
     fallingObjects: [],
     particles: [],
+    floatingTexts: [], // NEW: Floating text system
     noseX: 0.5,
     noseY: 0.5,
     faceScale: 0.1,
@@ -66,8 +151,7 @@ const gameState = {
     muted: false
 };
 
-// --- 4. CLASSES ---
-
+// === CLASSES ===
 class Particle {
     constructor(x, y, color) {
         this.x = x;
@@ -100,20 +184,17 @@ class Particle {
 
 class FallingObject {
     constructor(w, h, type, speedMult, spawnWidthRatio) {
-        this.type = type; // 'gem' or 'bomb'
-        this.radius = 25;
+        this.type = type;
+        this.radius = 30;
 
-        // --- CONE LOGIC ---
-        // Range depends on face distance (faceScale)
         const range = w * spawnWidthRatio;
         const minX = (w - range) / 2;
         this.x = minX + Math.random() * range;
 
-        this.y = -50;
+        this.y = -60;
         this.speed = (Math.random() * 3 + 4) * speedMult;
 
         this.color = type === 'gem' ? '#00f2ea' : '#ff0050';
-        this.glowColor = type === 'gem' ? 'rgba(0, 242, 234, 0.6)' : 'rgba(255, 0, 80, 0.6)';
     }
 
     update() {
@@ -121,45 +202,23 @@ class FallingObject {
     }
 
     draw(ctx) {
-        ctx.save();
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = this.glowColor;
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-
-        if (this.type === 'gem') {
-            // Diamond Shape
-            ctx.moveTo(this.x, this.y - this.radius);
-            ctx.lineTo(this.x + this.radius, this.y);
-            ctx.lineTo(this.x, this.y + this.radius);
-            ctx.lineTo(this.x - this.radius, this.y);
-        } else {
-            // Bomb Shape
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            if (Math.floor(Date.now() / 100) % 2 === 0) {
-                ctx.fillStyle = '#ffcccc'; // Blink
-            }
-        }
-        ctx.fill();
-
-        // Emoji Overlay
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#fff";
-        ctx.font = "20px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(this.type === 'gem' ? "💎" : "💣", this.x, this.y);
-
-        ctx.restore();
+        const sprite = this.type === 'gem' ? diamondSprite : bombSprite;
+        ctx.drawImage(
+            sprite,
+            this.x - this.radius,
+            this.y - this.radius,
+            this.radius * 2,
+            this.radius * 2
+        );
     }
 }
 
-// --- 5. AUDIO & FX ---
+// === AUDIO & FX ===
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = new AudioCtx();
 
 const beep = (freq, type = 'sine') => {
-    if (gameState.muted) return;
+    if (State.muted) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
     const osc = audioCtx.createOscillator();
@@ -178,17 +237,28 @@ const beep = (freq, type = 'sine') => {
 
 function createExplosion(x, y, color) {
     for (let i = 0; i < 8; i++) {
-        gameState.particles.push(new Particle(x, y, color));
+        State.particles.push(new Particle(x, y, color));
     }
 }
 
+function createFloatingText(text, x, y) {
+    const el = document.createElement('div');
+    el.className = 'floating-text';
+    el.innerText = text;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    document.body.appendChild(el);
+
+    setTimeout(() => el.remove(), 1500);
+}
+
 function updateUI() {
-    if (D.scoreVal) D.scoreVal.innerText = gameState.score;
+    if (D.scoreVal) D.scoreVal.innerText = State.score;
 
     if (D.livesDisplay) {
         D.livesDisplay.innerHTML = '';
         for (let i = 0; i < 3; i++) {
-            D.livesDisplay.innerHTML += i < gameState.lives ? '❤️' : '🖤';
+            D.livesDisplay.innerHTML += i < State.lives ? '❤️' : '🖤';
         }
     }
 }
@@ -196,49 +266,67 @@ function updateUI() {
 function triggerVisualEffect(type) {
     if (type === 'score') {
         const hud = D.scoreHud;
-        hud.classList.remove('score-pulse-anim');
-        void hud.offsetWidth;
-        hud.classList.add('score-pulse-anim');
+        if (hud) {
+            hud.classList.remove('score-pulse-anim');
+            void hud.offsetWidth;
+            hud.classList.add('score-pulse-anim');
+        }
     } else if (type === 'damage') {
-        D.uiLayer.classList.remove('damage-effect');
-        void D.uiLayer.offsetWidth;
-        D.uiLayer.classList.add('damage-effect');
+        if (D.uiLayer) {
+            D.uiLayer.classList.remove('damage-effect');
+            void D.uiLayer.offsetWidth;
+            D.uiLayer.classList.add('damage-effect');
+        }
 
-        D.livesDisplay.classList.add('hearts-shake');
-        setTimeout(() => D.livesDisplay.classList.remove('hearts-shake'), 300);
+        if (D.livesDisplay) {
+            D.livesDisplay.classList.add('hearts-shake');
+            setTimeout(() => D.livesDisplay.classList.remove('hearts-shake'), 300);
+        }
     }
 }
 
-// --- 6. FLOW CONTROL ---
+function showToast(message) {
+    const toast = document.createElement("div");
+    toast.className = "toast";
+    toast.innerText = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
 
+// === FLOW CONTROL ===
 window.startGame = function () {
     D.menu.classList.add('hidden');
     D.gameOver.classList.add('hidden');
-    D.scoreHud.classList.remove('hidden'); // Ensure HUD is visible
+    if (D.leaderboard) D.leaderboard.classList.add('hidden');
+    D.scoreHud.classList.remove('hidden');
 
-    // Reset
-    gameState.score = 0;
-    gameState.lives = 3;
-    gameState.speedMultiplier = 1.0;
-    gameState.fallingObjects = [];
-    gameState.particles = [];
-    gameState.isGameActive = false;
+    // Reset State
+    State.score = 0;
+    State.lives = 3;
+    State.combo = 0;
+    State.speedMultiplier = 1.0;
+    State.bombChance = 0.35;
+    State.fallingObjects = [];
+    State.particles = [];
+    State.isGameActive = false;
 
     updateUI();
     showCountdown();
 
     // Watchdog
     setTimeout(() => {
-        if (!gameState.isGameActive && D.overlay.style.display !== 'none') {
-            console.log("Watchdog: Forced Start");
+        if (!State.isGameActive && D.overlay.style.display !== 'none') {
+            console.warn("Watchdog: Forced Start");
             D.overlay.style.display = 'none';
-            gameState.isGameActive = true;
-            gameLoop();
+            State.isGameActive = true;
+            State.lastSpawnTime = performance.now();
+            requestAnimationFrame(gameLoop);
         }
     }, 4500);
 }
 
 function showCountdown() {
+    if (!D.overlay || !D.countText) return;
     D.overlay.style.display = 'flex';
     D.overlay.classList.remove('hidden');
     let count = 3;
@@ -248,81 +336,86 @@ function showCountdown() {
         count--;
         if (count > 0) {
             D.countText.innerText = count;
+            beep(600, 'square');
         } else if (count === 0) {
             D.countText.innerText = "GO!";
             beep(1200, 'square');
         } else {
             clearInterval(timer);
             D.overlay.style.display = 'none';
-            gameState.isGameActive = true;
-            gameState.lastSpawnTime = performance.now();
+            State.isGameActive = true;
+            State.lastSpawnTime = performance.now();
             requestAnimationFrame(gameLoop);
         }
     }, 1000);
 }
 
 function endGame() {
-    gameState.isGameActive = false;
-    D.scoreHud.classList.add('hidden'); // Hide HUD on Game Over? User prompt said keep screens in UI layer.
-    // Actually user prompt didn't say hide HUD but standard flow usually masks it.
-    // Let's keep it consistent with previous logic.
+    State.isGameActive = false;
+    D.scoreHud.classList.add('hidden');
     D.gameOver.classList.remove('hidden');
-    document.getElementById('final-score').innerText = gameState.score;
 
-    D.saveBtn.disabled = false;
-    D.saveMsg.innerText = "";
-    D.username.value = "";
+    const finalScoreEl = document.getElementById('final-score');
+    if (finalScoreEl) finalScoreEl.innerText = State.score;
+
+    if (D.saveBtn) D.saveBtn.disabled = false;
+    if (D.saveMsg) D.saveMsg.innerText = "";
+    if (D.username) D.username.value = "";
+
     beep(150, 'sawtooth');
 }
 
-// --- 7. GAME LOOP ---
-
+// === GAME LOOP ===
 function gameLoop() {
-    if (!gameState.isGameActive) return;
+    if (!State.isGameActive) return;
 
     const ctx = D.canvas.getContext('2d');
     ctx.clearRect(0, 0, D.canvas.width, D.canvas.height);
 
-    // 1. Draw Nose (Last Known)
-    const noseXPx = gameState.lastKnownNose.x;
-    const noseYPx = gameState.lastKnownNose.y;
+    // Draw Nose (MIRROR MODE FIX)
+    const noseXPx = State.lastKnownNose.x;
+    const noseYPx = State.lastKnownNose.y;
 
     ctx.save();
     ctx.beginPath();
     ctx.arc(noseXPx, noseYPx, 10, 0, 2 * Math.PI);
-    ctx.fillStyle = "#00f2ea";
+    ctx.fillStyle = "rgba(0, 255, 255, 0.8)";
     ctx.shadowBlur = 15;
     ctx.shadowColor = "#00f2ea";
     ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
     ctx.restore();
 
-    // 2. Logic & Spawning
-    const now = performance.now();
+    // Dynamic Difficulty
+    const speedLevel = 1.0 + Math.floor(State.score / 50) * 0.1;
+    State.speedMultiplier = speedLevel;
 
-    // Speed Progression
-    const speedLevel = 1.0 + Math.floor(gameState.score / 50) * 0.1;
-    gameState.speedMultiplier = speedLevel;
+    // Increase bomb chance after 100 points
+    if (State.score >= 100) {
+        State.bombChance = 0.45;
+    }
 
     // Cone Logic
-    // Safe Width Ratio: 1.0 - FaceScale. 
-    // FaceScale 0.1 (Far) -> Ratio 0.9 (Wide)
-    // FaceScale 0.4 (Close) -> Ratio 0.6 (Narrower)
-    let safeWidthRatio = 1.0 - gameState.faceScale;
+    let safeWidthRatio = 1.0 - State.faceScale;
     if (safeWidthRatio < 0.4) safeWidthRatio = 0.4;
     if (safeWidthRatio > 0.95) safeWidthRatio = 0.95;
 
-    const currentInterval = gameState.spawnInterval / speedLevel;
+    const currentInterval = State.spawnInterval / speedLevel;
+    const now = performance.now();
 
-    if (now - gameState.lastSpawnTime > currentInterval) {
-        const type = Math.random() > 0.25 ? 'gem' : 'bomb';
-        const obj = new FallingObject(D.canvas.width, D.canvas.height, type, gameState.speedMultiplier, safeWidthRatio);
-        gameState.fallingObjects.push(obj);
-        gameState.lastSpawnTime = now;
+    if (now - State.lastSpawnTime > currentInterval) {
+        const type = Math.random() > State.bombChance ? 'gem' : 'bomb';
+        const obj = new FallingObject(D.canvas.width, D.canvas.height, type, State.speedMultiplier, safeWidthRatio);
+        State.fallingObjects.push(obj);
+        State.lastSpawnTime = now;
     }
 
-    // 3. Updates & Collision
-    for (let i = gameState.fallingObjects.length - 1; i >= 0; i--) {
-        const obj = gameState.fallingObjects[i];
+    // Object Updates & Collision
+    for (let i = State.fallingObjects.length - 1; i >= 0; i--) {
+        const obj = State.fallingObjects[i];
         obj.update();
         obj.draw(ctx);
 
@@ -330,51 +423,59 @@ function gameLoop() {
         const dy = obj.y - noseYPx;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Hit
+        // Collision
         if (distance < (obj.radius + 15)) {
-            gameState.fallingObjects.splice(i, 1);
+            State.fallingObjects.splice(i, 1);
             if (obj.type === 'gem') {
-                gameState.score += 10;
+                State.score += 10;
+                State.combo++;
                 triggerVisualEffect('score');
                 createExplosion(obj.x, obj.y, '#00f2ea');
-                beep(600 + (gameState.score), 'sine');
+                beep(600 + (State.score), 'sine');
+
+                // Combo Milestones
+                if (State.combo === 5) createFloatingText("+25 COMBO!", obj.x, obj.y);
+                if (State.combo === 10) createFloatingText("+50 COMBO!", obj.x, obj.y);
+                if (State.combo === 15) createFloatingText("+100 EPIC!", obj.x, obj.y);
+
             } else {
-                gameState.lives--;
+                State.lives--;
+                State.combo = 0; // Reset combo
                 triggerVisualEffect('damage');
                 createExplosion(obj.x, obj.y, '#ff0050');
                 beep(150, 'sawtooth');
             }
             updateUI();
-            if (gameState.lives <= 0) { endGame(); return; }
+            if (State.lives <= 0) { endGame(); return; }
             continue;
         }
 
-        // Miss check
+        // Miss Logic
         if (obj.y > D.canvas.height) {
-            // Fix Immortality: Missing a gem hurts
             if (obj.type === 'gem') {
-                gameState.lives--;
+                State.lives--;
+                State.combo = 0;
                 triggerVisualEffect('damage');
                 beep(100, 'square');
             }
-            gameState.fallingObjects.splice(i, 1);
+            State.fallingObjects.splice(i, 1);
             updateUI();
-            if (gameState.lives <= 0) { endGame(); return; }
+            if (State.lives <= 0) { endGame(); return; }
         }
     }
 
-    // 4. Particles
-    for (let i = gameState.particles.length - 1; i >= 0; i--) {
-        const p = gameState.particles[i];
+    // Particles
+    for (let i = State.particles.length - 1; i >= 0; i--) {
+        const p = State.particles[i];
         p.update();
         p.draw(ctx);
-        if (p.life <= 0) gameState.particles.splice(i, 1);
+        if (p.life <= 0) State.particles.splice(i, 1);
     }
 
     requestAnimationFrame(gameLoop);
 }
 
-// --- 8. MEDIAPIPE ---
+// === MEDIAPIPE ===
 function onResults(results) {
     if (D.canvas.width !== window.innerWidth) {
         D.canvas.width = window.innerWidth;
@@ -385,29 +486,34 @@ function onResults(results) {
         const landmarks = results.multiFaceLandmarks[0];
         const nose = landmarks[4];
 
-        // Mirror X
-        gameState.noseX = 1 - nose.x;
-        gameState.noseY = nose.y;
+        // MIRROR MODE FIX: Invert X coordinate
+        State.noseX = nose.x; // Already mirrored by CSS
+        State.noseY = nose.y;
 
-        gameState.lastKnownNose.x = gameState.noseX * D.canvas.width;
-        gameState.lastKnownNose.y = gameState.noseY * D.canvas.height;
+        State.lastKnownNose.x = State.noseX * D.canvas.width;
+        State.lastKnownNose.y = State.noseY * D.canvas.height;
 
-        // Face Scale (Cheek to Cheek)
+        // Face Scale
         const leftCheek = landmarks[234];
         const rightCheek = landmarks[454];
-        const dx = (1 - leftCheek.x) - (1 - rightCheek.x);
-        gameState.faceScale = Math.abs(dx);
+        const dx = Math.abs(leftCheek.x - rightCheek.x);
+        State.faceScale = dx;
     }
 }
 
-// Init MediaPipe
+// MediaPipe Init
 let faceMesh, camera;
 async function initSystem() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 1280, height: 720 }, audio: false });
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: 1280, height: 720 },
+            audio: false
+        });
         D.video.srcObject = stream;
 
-        faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+        faceMesh = new FaceMesh({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+        });
         faceMesh.setOptions({ maxNumFaces: 1, minDetectionConfidence: 0.5 });
         faceMesh.onResults(onResults);
 
@@ -417,34 +523,141 @@ async function initSystem() {
         });
         camera.start();
 
+        window.addEventListener('resize', () => {
+            D.canvas.width = window.innerWidth;
+            D.canvas.height = window.innerHeight;
+        });
+
     } catch (e) {
-        console.error("Camera Init Error:", e);
-        alert("Camera required!");
+        console.error("Camera Error:", e);
+        alert("Camera access required!");
     }
 }
 
-// --- 9. BINDINGS ---
-window.restartGame = window.startGame;
-window.returnToMenu = () => { /* ... */ };
-window.goHome = () => {
-    D.gameOver.classList.add('hidden');
-    D.menu.classList.remove('hidden');
-};
+// === LEADERBOARD ===
+window.openLeaderboard = async function () {
+    if (!db) {
+        showToast("Database offline!");
+        return;
+    }
 
-D.muteBtn.onclick = () => {
-    gameState.muted = !gameState.muted;
-    D.muteBtn.style.opacity = gameState.muted ? 0.5 : 1.0;
-};
+    D.menu.classList.add('hidden');
+    D.leaderboard.classList.remove('hidden');
 
-D.saveBtn.onclick = async () => {
-    const name = D.username.value.trim() || 'Anonymous';
-    D.saveBtn.innerText = "SAVING...";
+    if (D.list) D.list.innerHTML = "Loading...";
+
     try {
-        await addDoc(collection(db, 'scores'), { name: name, score: gameState.score, date: new Date() });
-        D.saveBtn.innerText = "SAVED!";
+        const q = query(collection(db, 'scores'), orderBy('score', 'desc'), limit(10));
+        const snap = await getDocs(q);
+
+        if (D.list) D.list.innerHTML = "";
+
+        let rank = 1;
+        snap.forEach(doc => {
+            const data = doc.data();
+            const item = document.createElement('div');
+            item.className = 'leaderboard-item';
+            item.innerHTML = `
+                <span class="name">${rank}. ${data.name || 'Anonymous'}</span>
+                <span class="score">${data.score}</span>
+            `;
+            D.list.appendChild(item);
+            rank++;
+        });
+
+        if (snap.empty && D.list) {
+            D.list.innerHTML = "<p style='text-align:center; opacity:0.5;'>No scores yet!</p>";
+        }
+
     } catch (e) {
-        D.saveBtn.innerText = "ERROR";
+        console.error("Leaderboard Error:", e);
+        if (D.list) D.list.innerHTML = "Error loading scores.";
     }
 };
 
+window.closeLeaderboard = function () {
+    if (D.leaderboard) D.leaderboard.classList.add('hidden');
+    D.menu.classList.remove('hidden');
+};
+
+// === BINDINGS ===
+window.restartGame = window.startGame;
+
+window.goHome = () => {
+    D.gameOver.classList.add('hidden');
+    if (D.leaderboard) D.leaderboard.classList.add('hidden');
+    D.menu.classList.remove('hidden');
+};
+
+// Mute
+if (D.muteBtn) {
+    D.muteBtn.onclick = () => {
+        State.muted = !State.muted;
+        D.muteBtn.style.opacity = State.muted ? 0.5 : 1.0;
+        D.muteBtn.innerHTML = State.muted ? '<i class="fa-solid fa-volume-xmark"></i>' : '<i class="fa-solid fa-volume-high"></i>';
+    };
+}
+
+// Save Score
+if (D.saveBtn) {
+    D.saveBtn.onclick = async () => {
+        if (!db) {
+            showToast("Database offline!");
+            return;
+        }
+
+        const name = D.username.value.trim() || 'Anonymous';
+        D.saveBtn.innerText = "SAVING...";
+        D.saveBtn.disabled = true;
+
+        try {
+            await addDoc(collection(db, 'scores'), {
+                name: name,
+                score: State.score,
+                date: new Date()
+            });
+            D.saveMsg.innerText = "SAVED!";
+            D.saveMsg.style.color = "#00f2ea";
+            showToast("Score saved! 🎉");
+        } catch (e) {
+            console.error("Save Error:", e);
+            D.saveMsg.innerText = "ERROR";
+            D.saveMsg.style.color = "#ff0050";
+            D.saveBtn.disabled = false;
+        }
+    };
+}
+
+// Share
+if (D.shareBtn) {
+    D.shareBtn.onclick = async () => {
+        const shareData = {
+            title: 'ChatGames',
+            text: `Skorum: ${State.score}! 🔥 ChatGames'te beni geçebilir misin?`,
+            url: window.location.href,
+        };
+
+        // Try native share first
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+                console.log('Shared successfully');
+            } catch (err) {
+                console.log('Share cancelled');
+            }
+        }
+        // Fallback to clipboard
+        else {
+            try {
+                await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+                showToast("Link copied! 📋");
+            } catch (err) {
+                showToast("Share failed");
+            }
+        }
+    };
+}
+
+// === INIT ===
 initSystem();
+console.log("✓ v0.9.6 READY");
