@@ -28,6 +28,16 @@
         </header>
 
         <main>
+            <!-- Score Display -->
+            <div class="score-display" id="scoreDisplay">
+                Score: <span id="scoreValue">0</span>
+                <div class="lives-display" id="livesDisplay">
+                    <span class="heart">❤️</span>
+                    <span class="heart">❤️</span>
+                    <span class="heart">❤️</span>
+                </div>
+            </div>
+
             <div class="video-container">
                 <video id="videoElement" autoplay playsinline></video>
                 <canvas id="canvasElement"></canvas>
@@ -51,13 +61,28 @@
                         <circle cx="12" cy="12" r="3"></circle>
                     </svg>
                 </span>
-                Start Camera
+                Start Game
             </button>
         </main>
 
         <footer>
             <p class="footer-text">Your camera privacy is protected and no images are recorded.</p>
         </footer>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div class="game-over-overlay" id="gameOverOverlay">
+        <div class="game-over-modal">
+            <h2>Game Over!</h2>
+            <div class="final-score">
+                Your Score
+                <span class="final-score-value" id="finalScoreValue">0</span>
+            </div>
+            <button class="btn-restart" id="restartButton">
+                <span>🔄</span>
+                Restart Game
+            </button>
+        </div>
     </div>
 
     <script src="app.js"></script>

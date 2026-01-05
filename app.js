@@ -1,8 +1,14 @@
-// ChatGames - Camera Management & Face Tracking
+// ChatGames - Camera Management & Face Tracking with Game Loop
 const videoElement = document.getElementById('videoElement');
 const canvasElement = document.getElementById('canvasElement');
 const startButton = document.getElementById('startButton');
 const videoOverlay = document.getElementById('videoOverlay');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const scoreValue = document.getElementById('scoreValue');
+const livesDisplay = document.getElementById('livesDisplay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const finalScoreValue = document.getElementById('finalScoreValue');
+const restartButton = document.getElementById('restartButton');
 
 const canvasCtx = canvasElement.getContext('2d');
 
@@ -10,6 +16,86 @@ let stream = null;
 let isStreamActive = false;
 let faceMesh = null;
 let camera = null;
+
+// ===== GAME STATE =====
+const gameState = {
+    score: 0,
+    lives: 3,
+    maxLives: 3,
+    isGameActive: false,
+    fallingObjects: [],
+    nosePosition: { x: 0, y: 0 },
+    noseRadius: 20,
+    lastSpawnTime: 0,
+    spawnInterval: 1500, // Spawn new object every 1.5 seconds
+    animationFrameId: null
+};
+
+/**
+ * Falling Object Class
+ */
+class FallingObject {
+    constructor(canvasWidth) {
+        this.x = Math.random() * (canvasWidth - 60) + 30; // Random x position with padding
+        this.y = -30; // Start above canvas
+        this.radius = 15 + Math.random() * 10; // Random radius between 15-25
+        this.speed = 2 + Math.random() * 2; // Random speed between 2-4
+        this.color = this.getRandomColor();
+    }
+
+    /**
+     * Gets a random vibrant color
+     */
+    getRandomColor() {
+        const colors = [
+            '#ef4444', // Red
+            '#f59e0b', // Orange
+            '#10b981', // Green
+            '#3b82f6', // Blue
+            '#8b5cf6', // Purple
+            '#ec4899', // Pink
+            '#14b8a6'  // Teal
+        ];
+        return colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    /**
+     * Updates object position
+     */
+    update() {
+        this.y += this.speed;
+    }
+
+    /**
+     * Draws the object on canvas
+     */
+    draw(ctx) {
+        // Outer glow
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 5, 0, 2 * Math.PI);
+        ctx.fillStyle = this.color + '40'; // Add transparency
+        ctx.fill();
+
+        // Main circle
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+
+        // Inner highlight
+        ctx.beginPath();
+        ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.3, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.fill();
+    }
+
+    /**
+     * Checks if object is off-screen
+     */
+    isOffScreen(canvasHeight) {
+        return this.y - this.radius > canvasHeight;
+    }
+}
 
 /**
  * Initializes MediaPipe FaceMesh
@@ -37,11 +123,11 @@ function initializeFaceMesh() {
  * Processes FaceMesh results
  */
 function onFaceMeshResults(results) {
-    // Canvas boyutlarını ayarla
+    // Set canvas dimensions
     canvasElement.width = videoElement.videoWidth;
     canvasElement.height = videoElement.videoHeight;
 
-    // Canvas'ı temizle
+    // Clear canvas
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -49,15 +135,25 @@ function onFaceMeshResults(results) {
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         const landmarks = results.multiFaceLandmarks[0];
 
-        // Burun ucu landmark'ı (index 4 - nose tip)
+        // Nose tip landmark (index 4 - nose tip)
         const noseTip = landmarks[4];
 
-        // Canvas koordinatlarını al
-        const x = noseTip.x * canvasElement.width;
+        // Get canvas coordinates and invert X for mirror mode
+        // MediaPipe gives us 0-1 values, we invert X to match the mirrored display
+        const x = (1 - noseTip.x) * canvasElement.width;
         const y = noseTip.y * canvasElement.height;
 
-        // Draw red dot
-        drawNoseDot(x, y);
+        // Update game state nose position
+        gameState.nosePosition.x = x;
+        gameState.nosePosition.y = y;
+
+        // Draw game elements if game is active
+        if (gameState.isGameActive) {
+            drawGameElements();
+        } else {
+            // Just draw the nose tracking dot when game is not active
+            drawNoseDot(x, y);
+        }
     }
 
     canvasCtx.restore();
@@ -69,33 +165,212 @@ function onFaceMeshResults(results) {
 function drawNoseDot(x, y) {
     // Outer circle (glow effect)
     canvasCtx.beginPath();
-    canvasCtx.arc(x, y, 15, 0, 2 * Math.PI);
+    canvasCtx.arc(x, y, gameState.noseRadius, 0, 2 * Math.PI);
     canvasCtx.fillStyle = 'rgba(239, 68, 68, 0.3)';
     canvasCtx.fill();
 
     // Inner circle (main dot)
     canvasCtx.beginPath();
-    canvasCtx.arc(x, y, 8, 0, 2 * Math.PI);
+    canvasCtx.arc(x, y, gameState.noseRadius * 0.6, 0, 2 * Math.PI);
     canvasCtx.fillStyle = '#ef4444';
     canvasCtx.fill();
 
     // Center dot (highlight)
     canvasCtx.beginPath();
-    canvasCtx.arc(x, y, 3, 0, 2 * Math.PI);
+    canvasCtx.arc(x, y, gameState.noseRadius * 0.3, 0, 2 * Math.PI);
     canvasCtx.fillStyle = '#fca5a5';
     canvasCtx.fill();
 }
 
 /**
- * Starts the camera and gets video stream
+ * Spawns a new falling object
+ */
+function spawnFallingObject() {
+    const newObject = new FallingObject(canvasElement.width);
+    gameState.fallingObjects.push(newObject);
+}
+
+/**
+ * Main game loop - updates and renders game state
+ */
+function gameLoop(timestamp) {
+    if (!gameState.isGameActive) return;
+
+    // Spawn new objects at intervals
+    if (timestamp - gameState.lastSpawnTime > gameState.spawnInterval) {
+        spawnFallingObject();
+        gameState.lastSpawnTime = timestamp;
+    }
+
+    // Update falling objects
+    gameState.fallingObjects.forEach(obj => obj.update());
+
+    // Check collisions and remove collected/off-screen objects
+    gameState.fallingObjects = gameState.fallingObjects.filter(obj => {
+        // Check if object is off screen
+        if (obj.isOffScreen(canvasElement.height)) {
+            // Object escaped! Lose a life
+            gameState.lives--;
+            updateLivesDisplay();
+            console.log(`💔 Lost a life! Lives remaining: ${gameState.lives}`);
+
+            // Check for game over
+            if (gameState.lives <= 0) {
+                gameOver();
+            }
+
+            return false; // Remove from array
+        }
+
+        // Calculate distance between nose and object using Euclidean distance
+        const distance = Math.hypot(
+            gameState.nosePosition.x - obj.x,
+            gameState.nosePosition.y - obj.y
+        );
+
+        // Check collision
+        if (distance < (gameState.noseRadius + obj.radius)) {
+            // Collision detected! Increment score
+            gameState.score++;
+            updateScoreDisplay();
+            console.log(`💯 Score: ${gameState.score}`);
+            return false; // Remove collected object
+        }
+
+        return true; // Keep object in array
+    });
+
+    // Continue game loop
+    gameState.animationFrameId = requestAnimationFrame(gameLoop);
+}
+
+/**
+ * Draws all game elements (nose tracker + falling objects)
+ */
+function drawGameElements() {
+    // Draw all falling objects
+    gameState.fallingObjects.forEach(obj => {
+        obj.draw(canvasCtx);
+    });
+
+    // Draw nose tracker on top
+    drawNoseDot(gameState.nosePosition.x, gameState.nosePosition.y);
+}
+
+/**
+ * Updates the score display UI
+ */
+function updateScoreDisplay() {
+    scoreValue.textContent = gameState.score;
+}
+
+/**
+ * Updates the lives display UI
+ */
+function updateLivesDisplay() {
+    const hearts = livesDisplay.querySelectorAll('.heart');
+    hearts.forEach((heart, index) => {
+        if (index >= gameState.lives) {
+            heart.classList.add('lost');
+        } else {
+            heart.classList.remove('lost');
+        }
+    });
+}
+
+/**
+ * Starts the game
+ */
+function startGame() {
+    console.log('🎮 Starting game...');
+
+    // Reset game state
+    gameState.score = 0;
+    gameState.isGameActive = true;
+    gameState.fallingObjects = [];
+    gameState.lastSpawnTime = performance.now();
+
+    // Update UI
+    updateScoreDisplay();
+    scoreDisplay.style.display = 'block';
+
+    // Start game loop
+    gameState.animationFrameId = requestAnimationFrame(gameLoop);
+
+    console.log('✅ Game started!');
+}
+
+/**
+ * Stops the game
+ */
+function stopGame() {
+    console.log('⏹️ Stopping game...');
+
+    gameState.isGameActive = false;
+    gameState.fallingObjects = [];
+
+    // Cancel animation frame
+    if (gameState.animationFrameId) {
+        cancelAnimationFrame(gameState.animationFrameId);
+        gameState.animationFrameId = null;
+    }
+
+    // Hide score display
+    scoreDisplay.style.display = 'none';
+
+    console.log(`Final score: ${gameState.score}`);
+}
+
+/**
+ * Triggers game over state
+ */
+function gameOver() {
+    console.log('💀 Game Over!');
+
+    // Stop the game loop
+    gameState.isGameActive = false;
+    if (gameState.animationFrameId) {
+        cancelAnimationFrame(gameState.animationFrameId);
+        gameState.animationFrameId = null;
+    }
+
+    // Show game over modal
+    finalScoreValue.textContent = gameState.score;
+    gameOverOverlay.classList.add('active');
+
+    console.log(`Final Score: ${gameState.score}`);
+}
+
+/**
+ * Restarts the game
+ */
+function restartGame() {
+    console.log('🔄 Restarting game...');
+
+    // Hide game over modal
+    gameOverOverlay.classList.remove('active');
+
+    // Reset game state
+    gameState.score = 0;
+    gameState.lives = gameState.maxLives;
+    gameState.fallingObjects = [];
+    gameState.lastSpawnTime = performance.now();
+
+    // Update UI
+    updateScoreDisplay();
+    updateLivesDisplay();
+
+    // Start game
+    startGame();
+}\r\n\r\n/**\r\n * Starts the camera and gets video stream
  */
 async function startCamera() {
     try {
-        // Butonu devre dışı bırak
+        // Disable button
         startButton.disabled = true;
-        startButton.textContent = 'Kamera Başlatılıyor...';
+        startButton.textContent = 'Starting Camera...';
 
-        // Kamera izni iste ve stream al
+        // Request camera permission and get stream
         stream = await navigator.mediaDevices.getUserMedia({
             video: {
                 width: { ideal: 1280 },
@@ -138,6 +413,9 @@ async function startCamera() {
         console.log('✅ Camera started successfully');
         console.log('👃 Nose tracking active');
 
+        // Start the game
+        startGame();
+
     } catch (error) {
         console.error('❌ Camera start error:', error);
         handleCameraError(error);
@@ -148,6 +426,9 @@ async function startCamera() {
  * Stops the camera stream
  */
 function stopCamera() {
+    // Stop game first
+    stopGame();
+
     // Stop camera
     if (camera) {
         camera.stop();
@@ -161,7 +442,7 @@ function stopCamera() {
         stream = null;
     }
 
-    // Canvas'ı temizle
+    // Clear canvas
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
     // Show overlay
@@ -170,7 +451,7 @@ function stopCamera() {
     // Reset stream
     isStreamActive = false;
 
-    // Buton durumunu güncelle
+    // Update button state
     updateButtonState();
 
     console.log('⏹️ Camera stopped');
@@ -188,7 +469,7 @@ function updateButtonState() {
                     <rect x="14" y="4" width="4" height="16"></rect>
                 </svg>
             </span>
-            Stop Camera
+            Stop Game
         `;
         startButton.disabled = false;
     } else {
@@ -199,7 +480,7 @@ function updateButtonState() {
                     <circle cx="12" cy="12" r="3"></circle>
                 </svg>
             </span>
-            Start Camera
+            Start Game
         `;
         startButton.disabled = false;
     }
@@ -254,6 +535,13 @@ startButton.addEventListener('click', () => {
 });
 
 /**
+ * Listen for restart button click
+ */
+restartButton.addEventListener('click', () => {
+    restartGame();
+});
+
+/**
  * Stop camera when page is closed
  */
 window.addEventListener('beforeunload', () => {
@@ -270,4 +558,5 @@ videoElement.addEventListener('error', (e) => {
 });
 
 // Set initial state
-console.log('🎮 ChatGames loaded');
+scoreDisplay.style.display = 'none'; // Hide score initially
+console.log('🎮 ChatGames loaded - v0.1.1 Alpha');
