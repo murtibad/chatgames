@@ -4,13 +4,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ChatGames</title>
+    <title>ChatGames - Social Flux</title>
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
     <!-- MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
@@ -18,64 +21,80 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
         crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <!-- 1. Background Layer -->
+    <!-- 1. REALITY LAYER (Background) -->
+    <!-- Gradient Fallback is handled in CSS -->
     <video id="videoElement" autoplay playsinline muted></video>
     <canvas id="canvasElement"></canvas>
+    <div id="vignette-overlay"></div>
 
-    <!-- 2. Global UI (Outside UI Layer) -->
+    <!-- 2. GLOBAL HUD (Always Visible) -->
     <button id="mute-btn"><i class="fa-solid fa-volume-high"></i></button>
+
     <div id="score-hud" class="hidden">
-        SCORE: <span id="score-val">0</span> | ❤️ <span id="lives-val">3</span>
+        <span class="hud-label">SCORE</span>
+        <span id="score-val">0</span>
+        <div id="lives-display">❤️❤️❤️</div>
     </div>
 
-    <!-- 3. UI Layer (Center Content) -->
+    <!-- 3. INTERACTION LAYER (Menus) -->
     <div id="ui-layer">
 
         <!-- MENU SCREEN -->
         <div id="menu-screen" class="glass-panel">
             <h1 class="title">ChatGames</h1>
-            <p>Face Tracking Arcade</p>
-            <div class="card">
+            <p class="subtitle">Face Tracking Arcade</p>
+
+            <div class="game-card">
                 <i class="fa-solid fa-face-grin-wide icon-lg"></i>
                 <h3>Nose Hunter</h3>
                 <p>Catch points, avoid bombs!</p>
-                <button id="btn-start" class="btn-primary">PLAY NOW</button>
+                <button onclick="window.startGame()" class="btn-primary">PLAY NOW</button>
             </div>
+
+            <button id="btn-leaderboard" class="btn-secondary">
+                <i class="fa-solid fa-trophy"></i> LEADERBOARD
+            </button>
         </div>
 
         <!-- GAME OVER SCREEN -->
         <div id="game-over-screen" class="glass-panel hidden">
             <h2>GAME OVER</h2>
-            <div class="score-box">
-                SCORE<br>
+            <div class="result-box">
+                <span class="label">FINAL SCORE</span>
                 <span id="final-score">0</span>
             </div>
-            <input type="text" id="username-input" placeholder="Your Name" maxlength="12">
+
+            <input type="text" id="username-input" placeholder="Enter Your Name" maxlength="12">
             <button id="btn-save" class="btn-primary">SAVE SCORE</button>
             <div id="save-msg"></div>
 
-            <div class="row">
-                <button id="btn-share" class="btn-secondary">SHARE</button>
-                <button id="btn-restart" class="btn-secondary">RESTART</button>
+            <div class="action-row">
+                <button id="btn-share" class="btn-secondary"><i class="fa-solid fa-share-nodes"></i> Share</button>
+                <button onclick="window.restartGame()" class="btn-secondary"><i class="fa-solid fa-rotate-right"></i>
+                    Restart</button>
             </div>
+            <button onclick="window.goHome()" class="btn-text">Back to Home</button>
         </div>
 
-        <!-- GAME SCREEN (Minimal, mainly for state logic) -->
-        <div id="game-screen" class="hidden"></div>
+        <!-- LEADERBOARD SCREEN -->
+        <div id="leaderboard-screen" class="glass-panel hidden">
+            <h2>TOP PLAYERS</h2>
+            <div id="leaderboard-list">Loading...</div>
+            <button onclick="window.closeLeaderboard()" class="btn-secondary">CLOSE</button>
+        </div>
 
     </div>
 
-    <!-- 4. Overlay -->
+    <!-- 4. SYSTEM OVERLAYS -->
     <div id="countdown-overlay" class="hidden">
         <div id="countdown-text">3</div>
     </div>
-
-    <div id="vignette"></div>
 
     <script type="module" src="app.js"></script>
 </body>

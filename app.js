@@ -1,39 +1,40 @@
-// v0.9.3 CLEAN SLATE - app.js
+// v0.9.4 PHOENIX PROTOCOL - app.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+console.log("🔥 Phoenix Protocol Initiated...");
 
 // === 1. DEFENSIVE DOM SELECTION ===
 const getEl = (id) => {
     const el = document.getElementById(id);
-    if (!el) console.error(`MISSING ELEMENT: #${id}`);
+    if (!el) console.error(`CRITICAL: #${id} missing from HTML!`);
     return el;
 };
 
 const D = {
     video: getEl('videoElement'),
     canvas: getEl('canvasElement'),
-    uiLayer: getEl('ui-layer'), // Wrapper
-    menuScreen: getEl('menu-screen'),
-    gameScreen: getEl('game-screen'),
-    gameOverScreen: getEl('game-over-screen'),
+    // Screens
+    menu: getEl('menu-screen'),
+    gameOver: getEl('game-over-screen'),
+    leaderboard: getEl('leaderboard-screen'),
+    // HUD
     scoreHud: getEl('score-hud'),
     scoreVal: getEl('score-val'),
-    livesVal: getEl('lives-val'),
-    finalScore: getEl('final-score'),
-    countdownOverlay: getEl('countdown-overlay'),
-    countdownText: getEl('countdown-text'),
-    // Inputs/Btns
-    muteBtn: getEl('mute-btn'),
-    btnStart: getEl('btn-start'),
-    usernameInput: getEl('username-input'),
-    btnSave: getEl('btn-save'),
+    livesDisplay: getEl('lives-display'),
+    // Overlay
+    overlay: getEl('countdown-overlay'),
+    countText: getEl('countdown-text'),
+    // Inputs
+    username: getEl('username-input'),
     saveMsg: getEl('save-msg'),
-    btnShare: getEl('btn-share'),
-    btnRestart: getEl('btn-restart')
+    saveBtn: getEl('btn-save'),
+    muteBtn: getEl('mute-btn'),
+    list: getEl('leaderboard-list')
 };
 
 // === 2. CONFIG & STATE ===
-const FIREBASE_CONFIG = {
+const CONFIG = {
     apiKey: "AIzaSyBJqIfScXLNKWiaVylgKHlvuVbeT1rEOk8",
     authDomain: "chatgames-4b61b.firebaseapp.com",
     projectId: "chatgames-4b61b",
@@ -44,10 +45,10 @@ const FIREBASE_CONFIG = {
 
 let db;
 try {
-    const app = initializeApp(FIREBASE_CONFIG);
+    const app = initializeApp(CONFIG);
     db = getFirestore(app);
 } catch (e) {
-    console.error("Firebase Init Fail:", e);
+    console.warn("Firebase Offline:", e);
 }
 
 const State = {
@@ -56,55 +57,42 @@ const State = {
     lives: 3,
     objects: [],
     lastSpawn: 0,
-    muted: false
+    muted: false,
+    speed: 5
 };
 
-// === 3. SOUND SYSTEM ===
+// === 3. SOUND SYSTEM (Synthesized) ===
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let ctx = new AudioCtx();
+let audioCtx = new AudioCtx();
 
-const playSound = (type) => {
-    if (State.muted || !ctx) return;
-    if (ctx.state === 'suspended') ctx.resume();
+const beep = (freq = 600, type = 'sine') => {
+    if (State.muted) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+
     osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    const now = ctx.currentTime;
-
-    if (type === 'score') {
-        osc.frequency.setValueAtTime(600, now);
-        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.1);
-        osc.start(now);
-        osc.stop(now + 0.1);
-    } else if (type === 'damage') {
-        osc.frequency.setValueAtTime(150, now);
-        osc.type = 'sawtooth';
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.3);
-        osc.start(now);
-        osc.stop(now + 0.3);
-    }
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.2);
 };
 
 // === 4. CAMERA & MEDIAPIPE ===
-let faceMesh;
-let camera;
+let faceMesh, camera;
 
-async function initSystem() {
-    if (D.btnStart) D.btnStart.disabled = true;
-
+async function initCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user', width: 1280, height: 720 },
+            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: false
         });
         D.video.srcObject = stream;
-        await D.video.play();
 
         // MediaPipe
         faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
@@ -117,178 +105,237 @@ async function initSystem() {
         });
         camera.start();
 
-        // Bind Resize
         window.addEventListener('resize', resize);
         resize();
 
-        startCountdown();
-
     } catch (e) {
-        console.error("Camera/MP Error:", e);
-        alert("Camera start failed.");
+        console.error("Cam Check Failed:", e);
+        alert("Camera Access Denied. Please enable it.");
     }
 }
 
 function resize() {
-    if (D.canvas) {
-        D.canvas.width = window.innerWidth;
-        D.canvas.height = window.innerHeight;
-    }
+    D.canvas.width = window.innerWidth;
+    D.canvas.height = window.innerHeight;
 }
 
-// === 5. GAME LOGIC ===
+// === 5. GAME ENGINE ===
 function onResults(results) {
-    const cvs = D.canvas;
-    const cx = cvs.getContext('2d');
-    cx.clearRect(0, 0, cvs.width, cvs.height);
+    const ctx = D.canvas.getContext('2d');
+    ctx.clearRect(0, 0, D.canvas.width, D.canvas.height);
 
-    let nx, ny; // Nose coords
+    let nx, ny; // Nose Coords
 
+    // Draw Face/Nose
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         const lm = results.multiFaceLandmarks[0];
-        nx = lm[4].x * cvs.width;
-        ny = lm[4].y * cvs.height;
+        nx = lm[4].x * D.canvas.width;
+        ny = lm[4].y * D.canvas.height;
 
-        // Draw Player
-        cx.beginPath();
-        cx.arc(nx, ny, 15, 0, Math.PI * 2);
-        cx.fillStyle = '#00f2ea';
-        cx.shadowBlur = 15;
-        cx.shadowColor = '#00f2ea';
-        cx.fill();
+        // Neon Nose Dot
+        ctx.beginPath();
+        ctx.arc(nx, ny, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#00f2ea';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00f2ea';
+        ctx.fill();
     }
 
     if (State.active) {
-        gameLoop(cx, nx, ny);
+        gameLoop(ctx, nx, ny);
     }
 }
 
-function gameLoop(cx, nx, ny) {
-    // Spawn
+function gameLoop(ctx, nx, ny) {
+    // Spawn Logic
     if (performance.now() - State.lastSpawn > 1000) {
         State.objects.push({
-            x: Math.random() * (cx.width - 50) + 25,
+            x: Math.random() * (D.canvas.width - 40) + 20,
             y: -50,
-            type: Math.random() > 0.3 ? 'good' : 'bad'
+            type: Math.random() > 0.3 ? 'good' : 'bad' // 70% Good
         });
         State.lastSpawn = performance.now();
     }
 
-    // Update
+    // Object Logic
     State.objects.forEach((o, i) => {
-        o.y += 5; // Speed
+        o.y += State.speed;
 
         // Draw
-        cx.beginPath();
-        cx.arc(o.x, o.y, 20, 0, Math.PI * 2);
-        cx.fillStyle = o.type === 'good' ? '#00f2ea' : '#ff0050';
-        cx.fill();
-        cx.fillStyle = 'white';
-        cx.font = '20px Arial';
-        cx.textAlign = 'center';
-        cx.fillText(o.type === 'good' ? '💎' : '💣', o.x, o.y + 5);
+        ctx.beginPath();
+        ctx.textAlign = "center";
+
+        // Glow Effect
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = o.type === 'good' ? '#00f2ea' : '#ff0050';
+
+        ctx.font = "30px Arial";
+        ctx.fillText(o.type === 'good' ? '💎' : '💣', o.x, o.y);
+        ctx.shadowBlur = 0; // Reset
 
         // Collision
-        if (nx && Math.hypot(nx - o.x, ny - o.y) < 35) {
+        if (nx && Math.hypot(nx - o.x, ny - o.y) < 30) {
             State.objects.splice(i, 1);
             if (o.type === 'good') {
                 State.score += 10;
-                playSound('score');
+                beep(800, 'sine');
             } else {
                 State.lives--;
-                playSound('damage');
+                beep(150, 'sawtooth');
                 if (State.lives <= 0) endGame();
             }
             updateHud();
         }
 
-        // Offscreen
-        if (o.y > cx.height) State.objects.splice(i, 1);
+        // Cleanup
+        if (o.y > D.canvas.height) State.objects.splice(i, 1);
     });
 }
 
 function updateHud() {
-    if (D.scoreVal) D.scoreVal.innerText = State.score;
-    if (D.livesVal) D.livesVal.innerText = State.lives;
+    D.scoreVal.innerText = State.score;
+    let hearts = "";
+    for (let i = 0; i < State.lives; i++) hearts += "❤️";
+    D.livesDisplay.innerText = hearts;
 }
 
-// === 6. FLOW CONTROL ===
-function startCountdown() {
-    // UI Switch
-    if (D.menuScreen) D.menuScreen.classList.add('hidden');
-    if (D.gameOverScreen) D.gameOverScreen.classList.add('hidden');
+// === 6. FLOW CONTROL (CRITICAL) ===
+
+window.startGame = function () {
+    // 1. Hide Menu
+    if (D.menu) D.menu.classList.add('hidden');
+    if (D.gameOver) D.gameOver.classList.add('hidden');
     if (D.scoreHud) D.scoreHud.classList.remove('hidden');
-    if (D.countdownOverlay) D.countdownOverlay.classList.remove('hidden');
 
-    let n = 3;
-    if (D.countdownText) D.countdownText.innerText = n;
+    // 2. Reset Logic
+    State.score = 0;
+    State.lives = 3;
+    State.objects = [];
+    State.active = false;
+    updateHud();
 
-    let iv = setInterval(() => {
-        n--;
-        if (n > 0) D.countdownText.innerText = n;
-        else if (n === 0) D.countdownText.innerText = "GO!";
-        else {
-            clearInterval(iv);
-            if (D.countdownOverlay) D.countdownOverlay.classList.add('hidden');
+    // 3. Start Sequence
+    showCountdown();
+
+    // 4. WATCHDOG (Safety Net)
+    setTimeout(() => {
+        if (!State.active && D.menu.classList.contains('hidden')) {
+            console.warn("Watchdog: Forcing Game Start!");
+            D.overlay.classList.add('hidden');
             State.active = true;
-            State.score = 0;
-            State.lives = 3;
-            State.objects = [];
-            updateHud();
+            State.lastSpawn = performance.now();
+        }
+    }, 4500);
+}
+
+function showCountdown() {
+    D.overlay.classList.remove('hidden');
+    D.countText.innerText = "3";
+    let n = 3;
+
+    const iv = setInterval(() => {
+        n--;
+        if (n > 0) {
+            D.countText.innerText = n;
+        } else if (n === 0) {
+            D.countText.innerText = "GO!";
+        } else {
+            clearInterval(iv);
+            D.overlay.classList.add('hidden'); // CRITICAL: Hide Overlay
+            State.active = true; // START ENGINE
+            State.lastSpawn = performance.now();
         }
     }, 1000);
 }
 
 function endGame() {
     State.active = false;
-    if (D.scoreHud) D.scoreHud.classList.add('hidden');
-    if (D.gameOverScreen) D.gameOverScreen.classList.remove('hidden');
-    if (D.finalScore) D.finalScore.innerText = State.score;
-    if (D.saveMsg) D.saveMsg.innerText = "";
-    if (D.btnSave) D.btnSave.disabled = false;
+    D.scoreHud.classList.add('hidden');
+    D.gameOver.classList.remove('hidden');
+    document.getElementById('final-score').innerText = State.score;
+
+    // Reset Save UI
+    D.saveBtn.disabled = false;
+    D.saveMsg.innerText = "";
+    D.username.value = "";
+
+    beep(100, 'square');
+    setTimeout(() => beep(80, 'square'), 200);
 }
 
-// === 7. ACTIONS ===
-if (D.btnStart) D.btnStart.addEventListener('click', initSystem);
+// === 7. BINDINGS & ACTIONS ===
 
-if (D.btnRestart) D.btnRestart.addEventListener('click', startCountdown);
+window.restartGame = function () {
+    window.startGame();
+}
 
-if (D.btnSave) D.btnSave.addEventListener('click', async () => {
-    const name = D.usernameInput.value;
-    if (!name) { alert("Enter name!"); return; }
+window.goHome = function () {
+    D.gameOver.classList.add('hidden');
+    D.menu.classList.remove('hidden');
+    D.scoreHud.classList.remove('hidden');
+}
 
-    D.btnSave.disabled = true;
-    D.btnSave.innerText = "SAVING...";
+// Global Mute Toggle
+D.muteBtn.addEventListener('click', () => {
+    State.muted = !State.muted;
+    D.muteBtn.style.opacity = State.muted ? 0.5 : 1;
+});
+
+// Save Function with Error Handling
+D.saveBtn.addEventListener('click', async () => {
+    const name = D.username.value.trim() || 'Anonymous';
+    D.saveBtn.disabled = true;
+    D.saveBtn.innerText = "SAVING...";
 
     try {
-        await addDoc(collection(db, "scores"), {
-            name: name,
-            score: State.score,
-            date: new Date()
+        await addDoc(collection(db, 'scores'), {
+            name: name, score: State.score, date: new Date()
         });
         D.saveMsg.innerText = "SAVED!";
         D.saveMsg.style.color = "#00f2ea";
     } catch (e) {
-        console.error(e);
-        D.saveMsg.innerText = "ERROR!";
-        D.saveMsg.style.color = "red";
+        console.error("Save Error:", e);
+        D.saveMsg.innerText = "ERROR SAVING";
+        D.saveMsg.style.color = "#ff0050";
+        alert("Database connection failed. Please try again.");
+        D.saveBtn.disabled = false;
     }
 });
 
-if (D.btnShare) D.btnShare.addEventListener('click', async () => {
-    const txt = `Scored ${State.score} in ChatGames!`;
+D.list.addEventListener('click', () => {
+    // Placeholder logic for share
+});
+
+// Leaderboard Logic
+const openStats = document.getElementById('btn-leaderboard');
+const closeStats = document.querySelector('#leaderboard-screen button');
+
+if (openStats) openStats.onclick = async () => {
+    D.menu.classList.add('hidden');
+    D.leaderboard.classList.remove('hidden');
+    D.list.innerHTML = "Loading...";
+
     try {
-        if (navigator.share) await navigator.share({ title: 'ChatGames', text: txt });
-        else {
-            await navigator.clipboard.writeText(txt);
-            alert("Copied to clipboard!");
-        }
-    } catch (e) { console.log("Share cancel"); }
-});
+        const q = query(collection(db, 'scores'), orderBy('score', 'desc'), limit(10));
+        const snap = await getDocs(q);
+        D.list.innerHTML = "";
 
-if (D.muteBtn) D.muteBtn.addEventListener('click', () => {
-    State.muted = !State.muted;
-    D.muteBtn.style.opacity = State.muted ? "0.5" : "1";
-});
+        snap.forEach(doc => {
+            const d = doc.data();
+            D.list.innerHTML += `<div style="display:flex; justify-content:space-between; margin:10px 0; border-bottom:1px solid rgba(255,255,255,0.1); padding:5px;">
+                <span>${d.name}</span> <span style="color:#00f2ea">${d.score}</span>
+            </div>`;
+        });
+    } catch (e) {
+        D.list.innerHTML = "Leaderboard Offline.";
+    }
+};
 
-console.log("APP v0.9.3 LOADED (CLEAN SLATE)");
+window.closeLeaderboard = function () {
+    D.leaderboard.classList.add('hidden');
+    D.menu.classList.remove('hidden');
+}
+
+// === STARTUP ===
+initCamera();
+console.log("PHOENIX PROTOCOL ACTIVE v0.9.4");
