@@ -304,6 +304,9 @@ function spawnFallingObject() {
 function gameLoop(timestamp) {
     if (!gameState.isGameActive) return;
 
+    // Double safety check for canvas
+    if (!canvasElement.height || canvasElement.height === 0) return;
+
     if (timestamp - gameState.lastSpawnTime > gameState.spawnInterval) {
         spawnFallingObject();
         gameState.lastSpawnTime = timestamp;
@@ -401,6 +404,53 @@ function updateLivesDisplay() {
 }
 
 function startGame() {
+
+function showCountdown() {
+    let count = 3;
+    
+    const interval = setInterval(() => {
+        gameState.floatingTexts = [];
+        
+        if (count > 0) {
+            const text = new FloatingText(
+                canvasElement.width / 2,
+                canvasElement.height / 2,
+                count.toString(),
+                `#25F4EE`
+            );
+            text.lifetime = 60;
+            text.update = function() {};
+            gameState.floatingTexts.push(text);
+            count--;
+        } else {
+            const goText = new FloatingText(
+                canvasElement.width / 2,
+                canvasElement.height / 2,
+                `GO!`,
+                `#10b981`
+            );
+            goText.lifetime = 30;
+            goText.update = function() {};
+            gameState.floatingTexts.push(goText);
+            
+            clearInterval(interval);
+            
+            setTimeout(() => {
+                gameState.isGameActive = true;
+                gameState.lastSpawnTime = performance.now();
+                gameState.animationFrameId = requestAnimationFrame(gameLoop);
+            }, 500);
+        }
+    }, 1000);
+    
+    function animate() {
+        if (!gameState.isGameActive || gameState.floatingTexts.length > 0) {
+            requestAnimationFrame(animate);
+        }
+    }
+    animate();
+}
+
     if (videoElement.readyState < 2) {
         setTimeout(startGame, 100);
         return;
@@ -411,8 +461,7 @@ function startGame() {
 
     gameState.score = 0;
     gameState.lives = gameState.maxLives;
-    gameState.isGameActive = true;
-    gameState.fallingObjects = [];
+    gameState.isGameActive = false; // Countdown first`n    gameState.fallingObjects = [];
     gameState.floatingTexts = [];
     gameState.speedMultiplier = 1.0;
     gameState.lastSpawnTime = performance.now();
@@ -429,7 +478,7 @@ function startGame() {
         saveMessage.className = 'save-message';
     }
 
-    gameState.animationFrameId = requestAnimationFrame(gameLoop);
+    showCountdown();
 }
 
 function stopGame() {
