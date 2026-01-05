@@ -1,0 +1,6 @@
+# ChatGames - Allow all bots
+User-agent: *
+Allow: /
+
+# Sitemap (optional, add when you have one)
+# Sitemap: https://chatgames.vercel.app/sitemap.xml
