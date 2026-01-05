@@ -28,6 +28,8 @@ const gameState = {
     noseRadius: 20,
     lastSpawnTime: 0,
     spawnInterval: 1500, // Spawn new object every 1.5 seconds
+    speedMultiplier: 1.0, // Difficulty scaling (increases every 10 points)
+    floatingTexts: [], // Array of floating feedback texts
     animationFrameId: null
 };
 
@@ -35,28 +37,45 @@ const gameState = {
  * Falling Object Class
  */
 class FallingObject {
-    constructor(canvasWidth) {
+    constructor(canvasWidth, speedMultiplier = 1.0) {
         this.x = Math.random() * (canvasWidth - 60) + 30; // Random x position with padding
         this.y = -30; // Start above canvas
         this.radius = 15 + Math.random() * 10; // Random radius between 15-25
-        this.speed = 2 + Math.random() * 2; // Random speed between 2-4
-        this.color = this.getRandomColor();
+
+        // 20% chance of bad object (bomb)
+        this.type = Math.random() < 0.2 ? 'bad' : 'good';
+
+        // Set color based on type
+        this.color = this.type === 'good' ? this.getRandomGoodColor() : this.getBadColor();
+
+        // Apply speed multiplier
+        this.speed = (2 + Math.random() * 2) * speedMultiplier; // Base speed 2-4, scaled by multiplier
     }
 
     /**
-     * Gets a random vibrant color
+     * Gets a random good object color (green, blue, purple)
      */
-    getRandomColor() {
-        const colors = [
-            '#ef4444', // Red
-            '#f59e0b', // Orange
+    getRandomGoodColor() {
+        const goodColors = [
             '#10b981', // Green
             '#3b82f6', // Blue
             '#8b5cf6', // Purple
-            '#ec4899', // Pink
-            '#14b8a6'  // Teal
+            '#14b8a6', // Teal
+            '#06b6d4'  // Cyan
         ];
-        return colors[Math.floor(Math.random() * colors.length)];
+        return goodColors[Math.floor(Math.random() * goodColors.length)];
+    }
+
+    /**
+     * Gets bad object color (dark red/black)
+     */
+    getBadColor() {
+        const badColors = [
+            '#991b1b', // Dark red
+            '#7f1d1d', // Darker red
+            '#1f2937'  // Dark gray (almost black)
+        ];
+        return badColors[Math.floor(Math.random() * badColors.length)];
     }
 
     /**
@@ -70,11 +89,26 @@ class FallingObject {
      * Draws the object on canvas
      */
     draw(ctx) {
-        // Outer glow
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius + 5, 0, 2 * Math.PI);
-        ctx.fillStyle = this.color + '40'; // Add transparency
-        ctx.fill();
+        if (this.type === 'bad') {
+            // Draw bomb with red glow
+            // Outer red glow
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 8, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.4)'; // Red glow
+            ctx.fill();
+
+            // Middle glow
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 4, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
+            ctx.fill();
+        } else {
+            // Normal glow for good objects
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 5, 0, 2 * Math.PI);
+            ctx.fillStyle = this.color + '40'; // Add transparency
+            ctx.fill();
+        }
 
         // Main circle
         ctx.beginPath();
@@ -82,11 +116,21 @@ class FallingObject {
         ctx.fillStyle = this.color;
         ctx.fill();
 
-        // Inner highlight
-        ctx.beginPath();
-        ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.3, 0, 2 * Math.PI);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.fill();
+        // Draw bomb symbol for bad objects
+        if (this.type === 'bad') {
+            // Draw bomb emoji
+            ctx.fillStyle = '#ef4444';
+            ctx.font = `bold ${this.radius}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('💣', this.x, this.y);
+        } else {
+            // Inner highlight for good objects
+            ctx.beginPath();
+            ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.3, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.fill();
+        }
     }
 
     /**
@@ -94,6 +138,56 @@ class FallingObject {
      */
     isOffScreen(canvasHeight) {
         return this.y - this.radius > canvasHeight;
+    }
+}
+
+/**
+ * Floating Text Class (for visual feedback)
+ */
+class FloatingText {
+    constructor(x, y, text, color) {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.opacity = 1.0;
+        this.lifetime = 60; // 60 frames (~1 second at 60fps)
+        this.age = 0;
+    }
+
+    /**
+     * Updates text position and opacity
+     */
+    update() {
+        this.y -= 2; // Float upwards
+        this.age++;
+        this.opacity = 1.0 - (this.age / this.lifetime);
+    }
+
+    /**
+     * Draws the floating text
+     */
+    draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = this.opacity;
+        ctx.fillStyle = this.color;
+        ctx.font = 'bold 28px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Draw text with shadow for better visibility
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(this.text, this.x, this.y);
+
+        ctx.restore();
+    }
+
+    /**
+     * Checks if text should be removed
+     */
+    isDead() {
+        return this.age >= this.lifetime;
     }
 }
 
@@ -186,7 +280,7 @@ function drawNoseDot(x, y) {
  * Spawns a new falling object
  */
 function spawnFallingObject() {
-    const newObject = new FallingObject(canvasElement.width);
+    const newObject = new FallingObject(canvasElement.width, gameState.speedMultiplier);
     gameState.fallingObjects.push(newObject);
 }
 
@@ -209,14 +303,16 @@ function gameLoop(timestamp) {
     gameState.fallingObjects = gameState.fallingObjects.filter(obj => {
         // Check if object is off screen
         if (obj.isOffScreen(canvasElement.height)) {
-            // Object escaped! Lose a life
-            gameState.lives--;
-            updateLivesDisplay();
-            console.log(`💔 Lost a life! Lives remaining: ${gameState.lives}`);
+            // Only lose life for good objects that escape
+            if (obj.type === 'good') {
+                gameState.lives--;
+                updateLivesDisplay();
+                console.log(`💔 Lost a life! Lives remaining: ${gameState.lives}`);
 
-            // Check for game over
-            if (gameState.lives <= 0) {
-                gameOver();
+                // Check for game over
+                if (gameState.lives <= 0) {
+                    gameOver();
+                }
             }
 
             return false; // Remove from array
@@ -230,27 +326,75 @@ function gameLoop(timestamp) {
 
         // Check collision
         if (distance < (gameState.noseRadius + obj.radius)) {
-            // Collision detected! Increment score
-            gameState.score++;
-            updateScoreDisplay();
-            console.log(`💯 Score: ${gameState.score}`);
-            return false; // Remove collected object
+            // Collision detected!
+            if (obj.type === 'good') {
+                // Good object: +1 score
+                gameState.score++;
+                updateScoreDisplay();
+
+                // Create floating text feedback
+                const floatingText = new FloatingText(obj.x, obj.y, '+1', '#10b981');
+                gameState.floatingTexts.push(floatingText);
+
+                // Check for difficulty increase (every 10 points)
+                if (gameState.score % 10 === 0 && gameState.score > 0) {
+                    gameState.speedMultiplier *= 1.1;
+                    console.log(`⚡ Difficulty increased! Speed multiplier: ${gameState.speedMultiplier.toFixed(2)}x`);
+
+                    // Show level up text
+                    const levelUpText = new FloatingText(
+                        canvasElement.width / 2,
+                        canvasElement.height / 2,
+                        'SPEED UP!',
+                        '#f59e0b'
+                    );
+                    gameState.floatingTexts.push(levelUpText);
+                }
+
+                console.log(`💯 Score: ${gameState.score}`);
+            } else {
+                // Bad object (bomb): -2 lives
+                gameState.lives -= 2;
+                updateLivesDisplay();
+
+                // Create floating text feedback
+                const floatingText = new FloatingText(obj.x, obj.y, '-2 HP', '#ef4444');
+                gameState.floatingTexts.push(floatingText);
+
+                console.log(`💣 Hit a bomb! Lives: ${gameState.lives}`);
+
+                // Check for game over
+                if (gameState.lives <= 0) {
+                    gameOver();
+                }
+            }
+
+            return false; // Remove collected/hit object
         }
 
         return true; // Keep object in array
     });
+
+    // Update floating texts
+    gameState.floatingTexts.forEach(text => text.update());
+    gameState.floatingTexts = gameState.floatingTexts.filter(text => !text.isDead());
 
     // Continue game loop
     gameState.animationFrameId = requestAnimationFrame(gameLoop);
 }
 
 /**
- * Draws all game elements (nose tracker + falling objects)
+ * Draws all game elements (nose tracker + falling objects + floating texts)
  */
 function drawGameElements() {
     // Draw all falling objects
     gameState.fallingObjects.forEach(obj => {
         obj.draw(canvasCtx);
+    });
+
+    // Draw all floating texts
+    gameState.floatingTexts.forEach(text => {
+        text.draw(canvasCtx);
     });
 
     // Draw nose tracker on top
@@ -286,12 +430,16 @@ function startGame() {
 
     // Reset game state
     gameState.score = 0;
+    gameState.lives = gameState.maxLives;
     gameState.isGameActive = true;
     gameState.fallingObjects = [];
+    gameState.floatingTexts = [];
+    gameState.speedMultiplier = 1.0;
     gameState.lastSpawnTime = performance.now();
 
     // Update UI
     updateScoreDisplay();
+    updateLivesDisplay();
     scoreDisplay.style.display = 'block';
 
     // Start game loop
@@ -308,6 +456,7 @@ function stopGame() {
 
     gameState.isGameActive = false;
     gameState.fallingObjects = [];
+    gameState.floatingTexts = [];
 
     // Cancel animation frame
     if (gameState.animationFrameId) {
@@ -354,6 +503,8 @@ function restartGame() {
     gameState.score = 0;
     gameState.lives = gameState.maxLives;
     gameState.fallingObjects = [];
+    gameState.floatingTexts = [];
+    gameState.speedMultiplier = 1.0;
     gameState.lastSpawnTime = performance.now();
 
     // Update UI
@@ -562,4 +713,4 @@ videoElement.addEventListener('error', (e) => {
 
 // Set initial state
 scoreDisplay.style.display = 'none'; // Hide score initially
-console.log('🎮 ChatGames loaded - v0.1.3');
+console.log('🎮 ChatGames loaded - v0.2.0');
