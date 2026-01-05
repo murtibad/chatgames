@@ -1,4 +1,9 @@
 // ChatGames - Camera Management & Face Tracking with Game Loop
+// Screen elements
+const menuScreen = document.getElementById('menu-screen');
+const gameScreen = document.getElementById('game-screen');
+
+// Game elements
 const videoElement = document.getElementById('videoElement');
 const canvasElement = document.getElementById('canvasElement');
 const startButton = document.getElementById('startButton');
@@ -9,6 +14,8 @@ const livesDisplay = document.getElementById('livesDisplay');
 const gameOverOverlay = document.getElementById('gameOverOverlay');
 const finalScoreValue = document.getElementById('finalScoreValue');
 const restartButton = document.getElementById('restartButton');
+const menuButton = document.getElementById('menuButton');
+const menuButtonGameOver = document.getElementById('menuButtonGameOver');
 
 const canvasCtx = canvasElement.getContext('2d');
 
@@ -711,6 +718,53 @@ videoElement.addEventListener('error', (e) => {
     console.error('Video element error:', e);
 });
 
+/**
+ * Menu button listeners
+ */
+menuButton.addEventListener('click', () => {
+    returnToMenu();
+});
+
+menuButtonGameOver.addEventListener('click', () => {
+    returnToMenu();
+});
+
+// ===== NAVIGATION FUNCTIONS =====
+
+/**
+ * Initializes and starts the game
+ */
+function initGame(gameName) {
+    console.log(`🎮 Initializing game: ${gameName}`);
+
+    // Hide menu, show game screen
+    menuScreen.style.display = 'none';
+    gameScreen.style.display = 'flex';
+
+    // Start camera and game
+    startCamera();
+}
+
+/**
+ * Returns to main menu
+ */
+function returnToMenu() {
+    console.log('🏠 Returning to main menu...');
+
+    // Stop camera and game
+    stopCamera();
+
+    // Hide game over modal if visible
+    gameOverOverlay.classList.remove('active');
+
+    // Show menu, hide game screen
+    gameScreen.style.display = 'none';
+    menuScreen.style.display = 'flex';
+
+    console.log('✅ Returned to menu');
+}
+
 // Set initial state
 scoreDisplay.style.display = 'none'; // Hide score initially
-console.log('🎮 ChatGames loaded - v0.2.0');
+console.log('🎮 ChatGames Platform loaded - v0.3.0');
+
