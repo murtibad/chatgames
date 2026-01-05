@@ -138,9 +138,9 @@ function onFaceMeshResults(results) {
         // Nose tip landmark (index 4 - nose tip)
         const noseTip = landmarks[4];
 
-        // Get canvas coordinates and invert X for mirror mode
-        // MediaPipe gives us 0-1 values, we invert X to match the mirrored display
-        const x = (1 - noseTip.x) * canvasElement.width;
+        // Get canvas coordinates (use raw values, CSS handles mirroring)
+        // MediaPipe gives us 0-1 values, CSS transform: scaleX(-1) mirrors the display
+        const x = noseTip.x * canvasElement.width;
         const y = noseTip.y * canvasElement.height;
 
         // Update game state nose position
@@ -562,4 +562,4 @@ videoElement.addEventListener('error', (e) => {
 
 // Set initial state
 scoreDisplay.style.display = 'none'; // Hide score initially
-console.log('🎮 ChatGames loaded - v0.1.2');
+console.log('🎮 ChatGames loaded - v0.1.3');
