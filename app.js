@@ -53,8 +53,8 @@ function syncCanvasSize() {
 }
 
 // Initial sync
-syncCanvasSizeif (canvasElement) {
-   ;
+if (canvasElement) {
+    syncCanvasSize();
 }
 
 // Sync on resize
