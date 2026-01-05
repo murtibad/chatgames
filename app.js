@@ -1,20 +1,100 @@
-// ChatGames - Kamera Yönetimi
+// ChatGames - Camera Management & Face Tracking
 const videoElement = document.getElementById('videoElement');
+const canvasElement = document.getElementById('canvasElement');
 const startButton = document.getElementById('startButton');
 const videoOverlay = document.getElementById('videoOverlay');
 
+const canvasCtx = canvasElement.getContext('2d');
+
 let stream = null;
 let isStreamActive = false;
+let faceMesh = null;
+let camera = null;
 
 /**
- * Kamerayı başlatır ve video akışını alır
+ * Initializes MediaPipe FaceMesh
+ */
+function initializeFaceMesh() {
+    faceMesh = new FaceMesh({
+        locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+        }
+    });
+
+    faceMesh.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+
+    faceMesh.onResults(onFaceMeshResults);
+
+    console.log('🎭 MediaPipe FaceMesh initialized');
+}
+
+/**
+ * Processes FaceMesh results
+ */
+function onFaceMeshResults(results) {
+    // Canvas boyutlarını ayarla
+    canvasElement.width = videoElement.videoWidth;
+    canvasElement.height = videoElement.videoHeight;
+
+    // Canvas'ı temizle
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+    // If face is detected
+    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        const landmarks = results.multiFaceLandmarks[0];
+
+        // Burun ucu landmark'ı (index 4 - nose tip)
+        const noseTip = landmarks[4];
+
+        // Canvas koordinatlarını al
+        const x = noseTip.x * canvasElement.width;
+        const y = noseTip.y * canvasElement.height;
+
+        // Draw red dot
+        drawNoseDot(x, y);
+    }
+
+    canvasCtx.restore();
+}
+
+/**
+ * Draws a red dot on the nose tip
+ */
+function drawNoseDot(x, y) {
+    // Outer circle (glow effect)
+    canvasCtx.beginPath();
+    canvasCtx.arc(x, y, 15, 0, 2 * Math.PI);
+    canvasCtx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+    canvasCtx.fill();
+
+    // Inner circle (main dot)
+    canvasCtx.beginPath();
+    canvasCtx.arc(x, y, 8, 0, 2 * Math.PI);
+    canvasCtx.fillStyle = '#ef4444';
+    canvasCtx.fill();
+
+    // Center dot (highlight)
+    canvasCtx.beginPath();
+    canvasCtx.arc(x, y, 3, 0, 2 * Math.PI);
+    canvasCtx.fillStyle = '#fca5a5';
+    canvasCtx.fill();
+}
+
+/**
+ * Starts the camera and gets video stream
  */
 async function startCamera() {
     try {
         // Butonu devre dışı bırak
         startButton.disabled = true;
         startButton.textContent = 'Kamera Başlatılıyor...';
-        
+
         // Kamera izni iste ve stream al
         stream = await navigator.mediaDevices.getUserMedia({
             video: {
@@ -24,57 +104,80 @@ async function startCamera() {
             },
             audio: false
         });
-        
-        // Video elementine stream'i ata
+
+        // Assign stream to video element
         videoElement.srcObject = stream;
-        
-        // Video oynatmayı başlat
+
+        // Start video playback
         await videoElement.play();
-        
-        // Overlay'i gizle
+
+        // Hide overlay
         videoOverlay.classList.add('hidden');
-        
-        // Stream aktif olarak işaretle
+
+        // Mark stream as active
         isStreamActive = true;
-        
-        // Buton durumunu güncelle
+
+        // Initialize MediaPipe FaceMesh
+        if (!faceMesh) {
+            initializeFaceMesh();
+        }
+
+        // Connect camera with FaceMesh
+        camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await faceMesh.send({ image: videoElement });
+            },
+            width: 1280,
+            height: 720
+        });
+        camera.start();
+
+        // Update button state
         updateButtonState();
-        
-        console.log('✅ Kamera başarıyla başlatıldı');
-        
+
+        console.log('✅ Camera started successfully');
+        console.log('👃 Nose tracking active');
+
     } catch (error) {
-        console.error('❌ Kamera başlatma hatası:', error);
+        console.error('❌ Camera start error:', error);
         handleCameraError(error);
     }
 }
 
 /**
- * Kamera akışını durdurur
+ * Stops the camera stream
  */
 function stopCamera() {
-    if (stream) {
-        // Tüm track'leri durdur
-        stream.getTracks().forEach(track => track.stop());
-        
-        // Video elementini temizle
-        videoElement.srcObject = null;
-        
-        // Overlay'i göster
-        videoOverlay.classList.remove('hidden');
-        
-        // Stream'i sıfırla
-        stream = null;
-        isStreamActive = false;
-        
-        // Buton durumunu güncelle
-        updateButtonState();
-        
-        console.log('⏹️ Kamera durduruldu');
+    // Stop camera
+    if (camera) {
+        camera.stop();
+        camera = null;
     }
+
+    // Stop stream
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        videoElement.srcObject = null;
+        stream = null;
+    }
+
+    // Canvas'ı temizle
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+    // Show overlay
+    videoOverlay.classList.remove('hidden');
+
+    // Reset stream
+    isStreamActive = false;
+
+    // Buton durumunu güncelle
+    updateButtonState();
+
+    console.log('⏹️ Camera stopped');
 }
 
 /**
- * Buton durumunu günceller
+ * Updates button state
  */
 function updateButtonState() {
     if (isStreamActive) {
@@ -85,7 +188,7 @@ function updateButtonState() {
                     <rect x="14" y="4" width="4" height="16"></rect>
                 </svg>
             </span>
-            Kamerayı Durdur
+            Stop Camera
         `;
         startButton.disabled = false;
     } else {
@@ -96,51 +199,51 @@ function updateButtonState() {
                     <circle cx="12" cy="12" r="3"></circle>
                 </svg>
             </span>
-            Kamerayı Başlat
+            Start Camera
         `;
         startButton.disabled = false;
     }
 }
 
 /**
- * Kamera hatalarını yönetir
+ * Handles camera errors
  */
 function handleCameraError(error) {
-    let errorMessage = 'Kamera başlatılamadı. ';
-    
+    let errorMessage = 'Failed to start camera. ';
+
     switch (error.name) {
         case 'NotAllowedError':
         case 'PermissionDeniedError':
-            errorMessage += 'Kamera izni verilmedi. Lütfen tarayıcı ayarlarından kamera erişimine izin verin.';
+            errorMessage += 'Camera permission denied. Please allow camera access in browser settings.';
             break;
         case 'NotFoundError':
         case 'DevicesNotFoundError':
-            errorMessage += 'Hiçbir kamera bulunamadı. Lütfen kameranızın bağlı olduğundan emin olun.';
+            errorMessage += 'No camera found. Please ensure your camera is connected.';
             break;
         case 'NotReadableError':
         case 'TrackStartError':
-            errorMessage += 'Kamera başka bir uygulama tarafından kullanılıyor olabilir.';
+            errorMessage += 'Camera may be in use by another application.';
             break;
         case 'OverconstrainedError':
         case 'ConstraintNotSatisfiedError':
-            errorMessage += 'Kamera talep edilen ayarları desteklemiyor.';
+            errorMessage += 'Camera does not support the requested settings.';
             break;
         case 'TypeError':
-            errorMessage += 'Kamera ayarlarında bir hata oluştu.';
+            errorMessage += 'An error occurred in camera settings.';
             break;
         default:
-            errorMessage += `Hata: ${error.message}`;
+            errorMessage += `Error: ${error.message}`;
     }
-    
+
     alert(errorMessage);
-    
-    // Butonu yeniden etkinleştir
+
+    // Re-enable button
     startButton.disabled = false;
     updateButtonState();
 }
 
 /**
- * Buton tıklama olayını dinle
+ * Listen for button click event
  */
 startButton.addEventListener('click', () => {
     if (isStreamActive) {
@@ -151,7 +254,7 @@ startButton.addEventListener('click', () => {
 });
 
 /**
- * Sayfa kapatılırken kamerayı durdur
+ * Stop camera when page is closed
  */
 window.addEventListener('beforeunload', () => {
     if (isStreamActive) {
@@ -160,11 +263,11 @@ window.addEventListener('beforeunload', () => {
 });
 
 /**
- * Video element hata kontrolü
+ * Video element error handling
  */
 videoElement.addEventListener('error', (e) => {
-    console.error('Video element hatası:', e);
+    console.error('Video element error:', e);
 });
 
-// Başlangıç durumunu ayarla
-console.log('🎮 ChatGames yüklendi');
+// Set initial state
+console.log('🎮 ChatGames loaded');
