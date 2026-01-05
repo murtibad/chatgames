@@ -250,6 +250,7 @@ function initializeFaceMesh() {
 }
 
 function onFaceMeshResults(results) {
+    try {
     canvasElement.width = videoElement.videoWidth;
     canvasElement.height = videoElement.videoHeight;
 
@@ -306,6 +307,8 @@ function gameLoop(timestamp) {
 
     // Double safety check for canvas
     if (!canvasElement.height || canvasElement.height === 0) return;
+
+    try {
 
     if (timestamp - gameState.lastSpawnTime > gameState.spawnInterval) {
         spawnFallingObject();
@@ -379,6 +382,11 @@ function gameLoop(timestamp) {
     gameState.floatingTexts.forEach(text => text.update());
     gameState.floatingTexts = gameState.floatingTexts.filter(text => !text.isDead());
 
+        } catch (error) {
+        console.error('GameLoop error:', error);
+        return;
+    }
+
     gameState.animationFrameId = requestAnimationFrame(gameLoop);
 }
 
@@ -406,42 +414,47 @@ function updateLivesDisplay() {
 function startGame() {
 
     function showCountdown() {
-        const overlay = document.getElementById('countdownOverlay');
-        const text = document.getElementById('countdownText');
-
-        if (!overlay || !text) {
-            // Fallback if elements missing
-            gameState.isGameActive = true;
-            gameState.animationFrameId = requestAnimationFrame(gameLoop);
-            return;
-        }
-
-        text.textContent = '3';
-        text.style.color = '#25F4EE';
-        overlay.style.display = 'flex';
-        let count = 3;
-        text.textContent = count;
-
-        const interval = setInterval(() => {
-            count--;
-
-            if (count > 0) {
-                text.textContent = count;
-            } else if (count === 0) {
-                text.textContent = 'GO!';
-                text.style.color = '#10b981';
-            } else {
-                // Countdown finished
-                clearInterval(interval);
-                overlay.style.display = 'none';
-
-                // NOW start the game
-                gameState.isGameActive = true;
-                gameState.lastSpawnTime = performance.now();
-                gameState.animationFrameId = requestAnimationFrame(gameLoop);
-            }
-        }, 1000);
+    const overlay = document.getElementById(`countdownOverlay`);
+    const text = document.getElementById(`countdownText`);
+    
+    if (!overlay || !text) {
+        gameState.isGameActive = true;
+        gameState.animationFrameId = requestAnimationFrame(gameLoop);
+        return;
     }
+    
+    // Wait for video to be fully ready
+    if (videoElement.readyState < 4) {
+        setTimeout(showCountdown, 100);
+        return;
+    }
+    
+    text.textContent = `3`;
+    text.style.color = `white`;
+    overlay.style.display = `flex`;
+    let count = 3;
+    
+    const interval = setInterval(() => {
+        count--;
+        
+        if (count > 0) {
+            text.textContent = count;
+            text.style.animation = `none`;
+            setTimeout(() => text.style.animation = `pulse-scale 1s ease-in-out`, 10);
+        } else if (count === 0) {
+            text.textContent = `GO!`;
+            text.style.color = `#10b981`;
+            text.style.animation = `pulse-scale 0.5s ease-in-out`;
+        } else {
+            clearInterval(interval);
+            overlay.style.display = `none`;
+            
+            gameState.isGameActive = true;
+            gameState.lastSpawnTime = performance.now();
+            gameState.animationFrameId = requestAnimationFrame(gameLoop);
+        }
+    }, 1000);
+}
 
 
     if (videoElement.readyState < 2) {
@@ -502,6 +515,12 @@ function gameOver() {
 }
 
 function restartGame() {
+    // Cancel any pending animation frames
+    if (gameState.animationFrameId) {
+        cancelAnimationFrame(gameState.animationFrameId);
+        gameState.animationFrameId = null;
+    }
+
     gameOverOverlay.classList.remove('active');
     gameState.score = 0;
     gameState.lives = gameState.maxLives;
@@ -540,7 +559,9 @@ async function startCamera() {
 
         camera = new Camera(videoElement, {
             onFrame: async () => {
-                await faceMesh.send({ image: videoElement });
+                if (videoElement.readyState >= 4) {
+                                    await faceMesh.send({ image: videoElement });
+                }
             },
             width: 1280,
             height: 720
@@ -615,14 +636,14 @@ function handleCameraError(error) {
  * Saves the user score to Firestore
  */
 async function saveScore(username, score) {
-    if (!username || username.trim() === '') {
-        showSaveMessage('Please enter a name!', 'error');
+    if (!username || username.trim() === ``) {
+        showToast(`Please enter a name!`, `error`);
         return;
     }
 
     try {
         saveScoreBtn.disabled = true;
-        showSaveMessage('Saving...', 'neutral');
+        saveScoreBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`;
 
         await addDoc(collection(db, "scores"), {
             username: username.trim(),
@@ -630,16 +651,22 @@ async function saveScore(username, score) {
             timestamp: new Date()
         });
 
-        showSaveMessage('Score stored successfully!', 'success');
-
-        // Wait a bit then return to menu
+        saveScoreBtn.innerHTML = `<i class="fa-solid fa-check"></i> Saved!`;
+        saveScoreBtn.style.background = `#10b981`;
+        showToast(`Score saved successfully!`, `success`);
+        
         setTimeout(() => {
             returnToMenu();
-            // Automatically open leaderboard
-            openLeaderboard();
+            setTimeout(() => window.openLeaderboard(), 300);
         }, 1500);
 
     } catch (error) {
+        console.error("Error saving score:", error);
+        showToast(`Failed to save score`, `error`);
+        saveScoreBtn.disabled = false;
+        saveScoreBtn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save Score`;
+    }
+} catch (error) {
         console.error("Error saving score: ", error);
         showSaveMessage('Error saving score. Try again.', 'error');
         saveScoreBtn.disabled = false;
