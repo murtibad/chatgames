@@ -43,6 +43,10 @@
 
 <body>
     <!-- ===== MENU SCREEN ===== -->
+        <!-- ===== BACKGROUND VIDEO & CANVAS ===== -->
+    <video id="videoElement" autoplay playsinline></video>
+    <canvas id="canvasElement"></canvas>
+
     <div id="menu-screen" class="screen">
         <div class="container">
             <header class="menu-header">
@@ -129,21 +133,7 @@
                     </div>
                 </div>
 
-                <div class="video-container">
-                    <video id="videoElement" autoplay playsinline></video>
-                    <canvas id="canvasElement"></canvas>
-                    <div class="video-overlay" id="videoOverlay">
-                        <div class="camera-icon">
-                            <!-- Camera Icon SVG -->
-                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path
-                                    d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z">
-                                </path>
-                                <circle cx="12" cy="13" r="4"></circle>
-                            </svg>
-                        </div>
-                    </div>
+                <!-- Video elements moved to body -->
                 </div>
 
                 <button id="startButton" class="btn-start">
@@ -216,15 +206,13 @@
 
 
     <!-- Countdown Overlay -->
-    <div id="countdownOverlay"
-        style="display:none !important; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9998;">
-        <div id="countdownText" style="font-size:8rem; font-weight:800; color:#25F4EE;">3</div>
+    <div id="countdownOverlay">
+        <div id="countdownText">3</div>
     </div>
 
 
     <!-- Sound Toggle Button (Body Level) -->
-    <button id="muteToggleBtn"
-        style="position:fixed; top:15px; right:15px; width:50px; height:50px; background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.2); border-radius:50%; color:white; cursor:pointer; z-index:99999; display:flex; align-items:center; justify-content:center; font-size:1.2rem;">
+    <button id="muteToggleBtn">
         <i class="fa-solid fa-volume-high"></i>
     </button>
 

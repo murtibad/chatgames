@@ -930,3 +930,105 @@ button:active,
     border-radius: 9999px !important;
     border: 1px solid var(--glass-border) !important;
 }
+
+/* ===== v0.9.1 LAYOUT STABILIZATION ===== */
+
+/* 1. Video & Canvas (Wallpaper Mode) */
+#videoElement, #canvasElement {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    z-index: -10 !important;
+    transform: scaleX(-1);
+}
+
+/* 2. Container Centering */
+body, .screen, .container {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    min-height: 100vh !important;
+    width: 100% !important;
+    margin: 0 !important;
+    max-width: none !important;
+}
+
+/* 3. Vignette Fix */
+.vignette-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -5 !important; /* Behind UI, above video */
+    background: radial-gradient(
+        ellipse at center,
+        transparent 0%,
+        transparent 40%,
+        rgba(0, 0, 0, 0.4) 80%,
+        rgba(0, 0, 0, 0.8) 100%
+    );
+    pointer-events: none;
+}
+
+/* 4. Countdown Overlay Center */
+#countdownOverlay {
+    display: none !important; /* Managed by JS, force flex when active */
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    backdrop-filter: blur(5px);
+    z-index: 9999 !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+#countdownOverlay.active {
+    display: flex !important;
+}
+
+#countdownText {
+    font-size: 10rem !important;
+    font-weight: 900 !important;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 50px rgba(37, 244, 238, 0.5);
+}
+
+/* 5. Sound Button (Refined) */
+#muteToggleBtn {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 50px !important;
+    height: 50px !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 50% !important;
+    color: white !important;
+    cursor: pointer !important;
+    z-index: 10000 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1.2rem !important;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+#muteToggleBtn:hover {
+    background: rgba(255, 255, 255, 0.25) !important;
+    transform: scale(1.1);
+}
+
+/* 6. Score Display (Top Center) */
+.score-display {
+    top: 30px !important;
+}
