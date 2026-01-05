@@ -3,222 +3,142 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description"
-        content="ChatGames - Play interactive camera-based games using face tracking. Compete globally on the leaderboard!">
-    <meta name="keywords" content="camera games, face tracking, interactive games, mediapipe, leaderboard">
-    <meta name="author" content="ChatGames">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ChatGames - Social Flux</title>
 
-    <!-- Open Graph Meta Tags -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="ChatGames - Play with Your Camera">
-    <meta property="og:description"
-        content="Play interactive camera-based games using face tracking. Compete globally on the leaderboard!">
-    <meta property="og:url" content="https://chatgames.vercel.app">
-    <meta property="og:site_name" content="ChatGames">
+    <!-- Meta Tags -->
+    <meta name="description" content="Play interactive camera-based games.">
 
-    <!-- Twitter Card Meta Tags -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="ChatGames - Play with Your Camera">
-    <meta name="twitter:description"
-        content="Play interactive camera-based games using face tracking. Compete globally on the leaderboard!">
-
-    <title>ChatGames - Camera Games Platform</title>
-    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts: Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;900&display=swap" rel="stylesheet">
 
-    <!-- FontAwesome Icons -->
+    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
-    <!-- MediaPipe Face Mesh CDN -->
+    <!-- MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
         crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
         crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <!-- ===== MENU SCREEN ===== -->
-        <!-- ===== BACKGROUND VIDEO & CANVAS ===== -->
-    <video id="videoElement" autoplay playsinline></video>
+
+    <!-- 1. Background Layer -->
+    <video id="videoElement" autoplay playsinline muted></video>
     <canvas id="canvasElement"></canvas>
+    <div id="vignette-overlay"></div>
 
-    <div id="menu-screen" class="screen">
-        <div class="container">
-            <header class="menu-header">
-                <h1 class="title">ChatGames</h1>
-                <p class="subtitle">Play Games with Your Camera</p>
-            </header>
-
-            <main class="menu-main">
-                <h2 class="games-title">Choose Your Game</h2>
-
-                <div class="games-grid">
-                    <!-- Game Card: Nose Hunter -->
-                    <div class="game-card" onclick="initGame('nose-hunter')">
-                        <div class="game-card-icon">
-                            <!-- Face Icon (FontAwesome) -->
-                            <i class="fa-solid fa-face-grin-wide"
-                                style="font-size: 3.5rem; color: var(--accent-cyan);"></i>
-                        </div>
-                        <h3 class="game-card-title">Nose Hunter</h3>
-                        <p class="game-card-description">Avoid bombs, catch points!</p>
-                        <div class="btn-play">PLAY</div>
-                    </div>
-                </div>
-
-                <button class="btn-leaderboard" id="openLeaderboardBtn">
-                    <i class="fa-solid fa-trophy"></i>
-                    Leaderboard
-                </button>
-            </main>
-
-            <footer>
-                <p class="footer-text">Your camera privacy is protected.<br>No images are recorded.</p>
-            </footer>
-        </div>
-    </div>
-
-    <!-- ===== LEADERBOARD SCREEN ===== -->
-    <div id="leaderboard-screen" class="screen" style="display: none;">
-        <div class="container">
-            <header class="menu-header">
-                <i class="fa-solid fa-trophy" style="font-size: 3rem; color: #fbbf24; margin-bottom: 20px;"></i>
-                <h2 class="title" style="font-size: 2rem;">Top Players</h2>
-            </header>
-
-            <main class="menu-main" style="flex: 1; overflow-y: auto;">
-                <div class="leaderboard-list" id="leaderboardList">
-                    <div class="loading-spinner">
-                        <i class="fa-solid fa-circle-notch fa-spin"></i> Loading...
-                    </div>
-                    <!-- Leaderboard items will be injected here -->
-                </div>
-            </main>
-
-            <footer>
-                <button class="btn-menu" id="leaderboardBackBtn">
-                    <i class="fa-solid fa-arrow-left"></i>
-                    Back to Menu
-                </button>
-            </footer>
-        </div>
-    </div>
-
-    <!-- ===== GAME SCREEN ===== -->
-    <div id="game-screen" class="screen" style="display: none;">
-        <div class="container">
-            <main>
-                <!-- Score Display -->
-                <div class="score-display" id="scoreDisplay" style="display: none;">
-                    <div>Score: <span id="scoreValue">0</span></div>
-                    <div class="lives-display" id="livesDisplay">
-                        <!-- Heart Icons -->
-                        <svg class="heart" viewBox="0 0 24 24" fill="#FE2C55" stroke="none">
-                            <path
-                                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                        </svg>
-                        <svg class="heart" viewBox="0 0 24 24" fill="#FE2C55" stroke="none">
-                            <path
-                                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                        </svg>
-                        <svg class="heart" viewBox="0 0 24 24" fill="#FE2C55" stroke="none">
-                            <path
-                                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                        </svg>
-                    </div>
-                </div>
-
-                <!-- Video elements moved to body -->
-                </div>
-
-                <button id="startButton" class="btn-start">
-                    <!-- Play Icon SVG -->
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
-                    </svg>
-                    Start Game
-                </button>
-            </main>
-
-            <footer>
-                <button class="btn-menu" id="menuButton">
-                    <!-- Home Icon SVG -->
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        <polyline points="9 22 9 12 15 12 15 22" />
-                    </svg>
-                    Main Menu
-                </button>
-            </footer>
-        </div>
-    </div>
-
-    <!-- Game Over Modal -->
-    <div class="game-over-overlay" id="gameOverOverlay">
-        <div class="game-over-modal">
-            <h2>Game Over</h2>
-            <div class="final-score">
-                Your Score
-                <span class="final-score-value" id="finalScoreValue">0</span>
-            </div>
-
-            <!-- Save Score Form -->
-            <div class="save-score-form" id="saveScoreForm">
-                <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="15"
-                    class="username-input">
-                <button class="btn-save" id="saveScoreBtn">
-                    <i class="fa-solid fa-floppy-disk"></i> Save Score
-                </button>
-                <div id="saveMessage" class="save-message"></div>
-            </div>
-
-            <div class="modal-buttons">
-
-                <button class="btn-share" id="shareScoreBtn">
-                    <i class="fa-solid fa-share-nodes"></i> Share Score
-                </button>
-                <button class="btn-restart" id="restartButton">
-                    <!-- Refresh Icon SVG -->
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2.5">
-                        <polyline points="23 4 23 10 17 10" />
-                        <polyline points="1 20 1 14 7 14" />
-                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                    </svg>
-                    Restart Game
-                </button>
-                <button class="btn-menu" id="menuButtonGameOver">
-                    <!-- Home Icon SVG -->
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        <polyline points="9 22 9 12 15 12 15 22" />
-                    </svg>
-                    Main Menu
-                </button>
-            </div>
-        </div>
-    </div>
-
-
-    <!-- Countdown Overlay -->
-    <div id="countdownOverlay">
-        <div id="countdownText">3</div>
-    </div>
-
-
-    <!-- Sound Toggle Button (Body Level) -->
-    <button id="muteToggleBtn">
+    <!-- 2. Global UI Elements -->
+    <button id="mute-btn" class="glass-icon-btn">
         <i class="fa-solid fa-volume-high"></i>
     </button>
 
-    
-    <!-- Vignette Overlay for Readability -->
-    <div class="vignette-overlay"></div>
+    <!-- 3. Screens -->
+
+    <!-- MENU SCREEN -->
+    <div id="menu-screen" class="screen-container">
+        <div class="glass-panel main-menu">
+            <h1 class="app-title">ChatGames</h1>
+            <p class="app-subtitle">Face Tracking Arcade</p>
+
+            <div class="game-select-card" id="btn-select-nosehunter">
+                <div class="icon-wrapper">
+                    <i class="fa-solid fa-face-grin-wide"></i>
+                </div>
+                <h3>Nose Hunter</h3>
+                <p>Catch points, avoid bombs!</p>
+                <button class="btn-primary" id="btn-start-game">PLAY NOW</button>
+            </div>
+
+            <button class="btn-secondary" id="btn-open-leaderboard">
+                <i class="fa-solid fa-trophy"></i> Leaderboard
+            </button>
+        </div>
+
+        <div class="privacy-note">
+            <i class="fa-solid fa-shield-halved"></i> No images are sent to server. Processing is local.
+        </div>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="game-screen" class="screen-container hidden">
+        <!-- HUD -->
+        <div id="score-display" class="glass-pill">
+            <span class="score-label">SCORE</span>
+            <span id="score-value">0</span>
+            <div id="lives-display">
+                <i class="fa-solid fa-heart"></i>
+                <i class="fa-solid fa-heart"></i>
+                <i class="fa-solid fa-heart"></i>
+            </div>
+        </div>
+
+        <!-- In-game Controls -->
+        <!-- (Optional: Pause button could go here) -->
+    </div>
+
+    <!-- LEADERBOARD SCREEN -->
+    <div id="leaderboard-screen" class="screen-container hidden">
+        <div class="glass-panel leaderboard-panel">
+            <div class="panel-header">
+                <i class="fa-solid fa-trophy gold-icon"></i>
+                <h2>Top Players</h2>
+            </div>
+
+            <div id="leaderboard-list" class="scrollable-list">
+                <div class="loading-spinner"><i class="fa-solid fa-rotate fa-spin"></i> Loading...</div>
+            </div>
+
+            <div class="panel-footer">
+                <button class="btn-secondary" id="btn-close-leaderboard">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Overlays -->
+
+    <!-- COUNTDOWN OVERLAY -->
+    <div id="countdown-overlay" class="overlay hidden">
+        <div id="countdown-text">3</div>
+    </div>
+
+    <!-- GAME OVER MODAL -->
+    <div id="game-over-modal" class="overlay hidden">
+        <div class="glass-panel game-over-panel">
+            <h2>GAME OVER</h2>
+            <div class="final-score-box">
+                <span class="label">SCORE</span>
+                <span id="final-score-value">1250</span>
+            </div>
+
+            <div class="save-form">
+                <input type="text" id="username-input" placeholder="Your Name" maxlength="12">
+                <button id="btn-save-score" class="btn-primary small">
+                    <i class="fa-solid fa-floppy-disk"></i> SAVE
+                </button>
+            </div>
+            <div id="save-message"></div>
+
+            <div class="action-buttons">
+                <button id="btn-share-score" class="btn-secondary">
+                    <i class="fa-solid fa-share-nodes"></i> Share
+                </button>
+                <button id="btn-restart-game" class="btn-primary">
+                    <i class="fa-solid fa-rotate-right"></i> Play Again
+                </button>
+                <button id="btn-home" class="btn-text">
+                    <i class="fa-solid fa-house"></i> Home
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="app.js"></script>
 </body>

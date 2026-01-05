@@ -1,8 +1,13 @@
-// ChatGames - Camera Management & Face Tracking with Game Loop
+/**
+ * v0.9.3 REFRACTOR - app.js
+ * "The Great Refactor"
+ * Clean, Robust, Defensive Implementation
+ */
+
+// 1. IMPORTS & CONFIG
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// ====== FIREBASE CONFIG ======
 const firebaseConfig = {
     apiKey: "AIzaSyBJqIfScXLNKWiaVylgKHlvuVbeT1rEOk8",
     authDomain: "chatgames-4b61b.firebaseapp.com",
@@ -12,782 +17,422 @@ const firebaseConfig = {
     appId: "1:832676453422:web:92fb35a2c7dbf73cad13bf"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// Screen elements
-const menuScreen = document.getElementById('menu-screen');
-const gameScreen = document.getElementById('game-screen');
-const leaderboardScreen = document.getElementById('leaderboard-screen');
+// 2. DOM SELECTION (STRICT & DEFENSIVE)
+const DOM = {
+    // Screens
+    menuScreen: document.getElementById('menu-screen'),
+    gameScreen: document.getElementById('game-screen'),
+    leaderboardScreen: document.getElementById('leaderboard-screen'),
 
-// Game elements
-const videoElement = document.getElementById('videoElement');
-const canvasElement = document.getElementById('canvasElement');
-const startButton = document.getElementById('startButton');
-const videoOverlay = document.getElementById('videoOverlay');
-const scoreDisplay = document.getElementById('scoreDisplay');
-const scoreValue = document.getElementById('scoreValue');
-const livesDisplay = document.getElementById('livesDisplay');
-const gameOverOverlay = document.getElementById('gameOverOverlay');
-const finalScoreValue = document.getElementById('finalScoreValue');
-const restartButton = document.getElementById('restartButton');
-const menuButton = document.getElementById('menuButton');
-const menuButtonGameOver = document.getElementById('menuButtonGameOver');
+    // Core Elements
+    videoElement: document.getElementById('videoElement'),
+    canvasElement: document.getElementById('canvasElement'),
 
-// Leaderboard elements
-const openLeaderboardBtn = document.getElementById('openLeaderboardBtn');
-const leaderboardBackBtn = document.getElementById('leaderboardBackBtn');
-const leaderboardList = document.getElementById('leaderboardList');
-const saveScoreBtn = document.getElementById('saveScoreBtn');
-const usernameInput = document.getElementById('usernameInput');
-const saveMessage = document.getElementById('saveMessage');
+    // Buttons
+    muteBtn: document.getElementById('mute-btn'),
+    btnStartGame: document.getElementById('btn-start-game'),
+    btnOpenLeaderboard: document.getElementById('btn-open-leaderboard'),
+    btnCloseLeaderboard: document.getElementById('btn-close-leaderboard'),
+    btnSaveScore: document.getElementById('btn-save-score'),
+    btnShareScore: document.getElementById('btn-share-score'),
+    btnRestartGame: document.getElementById('btn-restart-game'),
+    btnHome: document.getElementById('btn-home'),
 
+    // HUD & Overlays
+    scoreValue: document.getElementById('score-value'),
+    livesDisplay: document.getElementById('lives-display'),
+    countdownOverlay: document.getElementById('countdown-overlay'),
+    countdownText: document.getElementById('countdown-text'),
+    gameOverModal: document.getElementById('game-over-modal'),
+    finalScoreValue: document.getElementById('final-score-value'),
+    usernameInput: document.getElementById('username-input'),
+    saveMessage: document.getElementById('save-message'),
+    leaderboardList: document.getElementById('leaderboard-list')
+};
 
-// ===== CANVAS RESIZE SYNCHRONIZATION =====
-function syncCanvasSize() {
-    if (canvasElement) {
-        canvasElement.width = window.innerWidth;
-        canvasElement.height = window.innerHeight;
-    }
-}
-
-// Initial sync
-if (canvasElement) {
-    syncCanvasSize();
-}
-
-// Sync on resize
-window.addEventListener(`resize`, () => {
-    syncCanvasSize();
+// Validate DOM - Halt if critical elements missing
+Object.entries(DOM).forEach(([key, element]) => {
+    if (!element) console.error(`CRITICAL: DOM Element '${key}' not found! Check HTML IDs.`);
 });
 
-const canvasCtx = canvasElement.getContext('2d', { willReadFrequently: true });
-
-let stream = null;
-let isStreamActive = false;
-let faceMesh = null;
-let camera = null;
-
-// ===== SOUND MANAGER (Synthesized Audio) =====
-class SoundManager {
-    constructor() {
-        this.audioContext = null;
-        this.isMuted = false;
-    }
-
-    init() {
-        // Initialize AudioContext on first user interaction
-        if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-    }
-
-    playTone(frequency, duration, waveType = 'sine', volume = 0.3) {
-        if (this.isMuted || !this.audioContext) return;
-
-        const oscillator = this.audioContext.createOscillator();
-        const gainNode = this.audioContext.createGain();
-
-        oscillator.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
-
-        oscillator.frequency.value = frequency;
-        oscillator.type = waveType;
-
-        gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
-
-        oscillator.start(this.audioContext.currentTime);
-        oscillator.stop(this.audioContext.currentTime + duration);
-    }
-
-    playScoreSound() {
-        // Sweet 'Ding' sound (sine wave)
-        this.playTone(800, 0.1, 'sine', 0.2);
-        setTimeout(() => this.playTone(1000, 0.1, 'sine', 0.15), 50);
-    }
-
-    playDamageSound() {
-        // Deep 'Buzz' sound (sawtooth wave)
-        this.playTone(150, 0.3, 'sawtooth', 0.3);
-    }
-
-    playGameOverSound() {
-        // Sad descending melody
-        this.playTone(400, 0.3, 'sine', 0.2);
-        setTimeout(() => this.playTone(350, 0.3, 'sine', 0.2), 300);
-        setTimeout(() => this.playTone(300, 0.5, 'sine', 0.2), 600);
-    }
-
-    toggleMute() {
-        this.isMuted = !this.isMuted;
-        return this.isMuted;
-    }
-}
-
-const soundManager = new SoundManager();
-
-
-// ===== GAME STATE =====
-const gameState = {
+// 3. STATE MANAGEMENT
+const GameState = {
+    isActive: false,
     score: 0,
     lives: 3,
     maxLives: 3,
-    isGameActive: false,
     fallingObjects: [],
-    nosePosition: { x: 0, y: 0 },
-    noseRadius: 20,
     lastSpawnTime: 0,
-    spawnInterval: 1500,
+    spawnInterval: 1000,
     speedMultiplier: 1.0,
-    floatingTexts: [],
+    isStreamReady: false,
     animationFrameId: null
 };
 
-/**
- * Falling Object Class
- */
-class FallingObject {
-    constructor(canvasWidth, speedMultiplier = 1.0) {
-        this.x = Math.random() * (canvasWidth - 60) + 30; // Random x position with padding
-        this.y = -30; // Start above canvas
-        this.radius = 15 + Math.random() * 10; // Random radius between 15-25
-        this.type = Math.random() < 0.2 ? 'bad' : 'good';
-        this.color = this.type === 'good' ? this.getRandomGoodColor() : this.getBadColor();
-        this.speed = (2 + Math.random() * 2) * speedMultiplier;
+// 4. SOUND MANAGER
+class SoundManager {
+    constructor() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.muted = false;
     }
 
-    getRandomGoodColor() {
-        const goodColors = ['#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#06b6d4'];
-        return goodColors[Math.floor(Math.random() * goodColors.length)];
+    playTone(freq, duration, type = 'sine') {
+        if (this.muted) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
     }
 
-    getBadColor() {
-        const badColors = ['#991b1b', '#7f1d1d', '#1f2937'];
-        return badColors[Math.floor(Math.random() * badColors.length)];
-    }
-
-    update() {
-        this.y += this.speed;
-    }
-
-    draw(ctx) {
-        if (this.type === 'bad') {
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius + 8, 0, 2 * Math.PI);
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
-            ctx.fill();
-
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius + 4, 0, 2 * Math.PI);
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
-            ctx.fill();
-        } else {
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius + 5, 0, 2 * Math.PI);
-            ctx.fillStyle = this.color + '40';
-            ctx.fill();
-        }
-
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
-        ctx.fillStyle = this.color;
-        ctx.fill();
-
-        if (this.type === 'bad') {
-            ctx.fillStyle = '#ef4444';
-            ctx.font = `bold ${this.radius}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('💣', this.x, this.y);
-        } else {
-            ctx.beginPath();
-            ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.3, 0, 2 * Math.PI);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.fill();
-        }
-    }
-
-    isOffScreen(canvasHeight) {
-        return this.y - this.radius > canvasHeight;
+    playScore() { this.playTone(880, 0.1, 'sine'); } // A5
+    playDamage() { this.playTone(150, 0.3, 'sawtooth'); } // Low buzz
+    playGameOver() {
+        this.playTone(300, 0.5, 'triangle');
+        setTimeout(() => this.playTone(250, 0.5, 'triangle'), 400);
     }
 }
+const soundManager = new SoundManager();
 
-/**
- * Floating Text Class
- */
-class FloatingText {
-    constructor(x, y, text, color) {
-        this.x = x;
-        this.y = y;
-        this.text = text;
-        this.color = color;
-        this.opacity = 1.0;
-        this.lifetime = 60;
-        this.age = 0;
-    }
+// 5. CAMERA & MEDIAPIPE SETUP
+let faceMesh;
+let camera;
 
-    update() {
-        this.y -= 2;
-        this.age++;
-        this.opacity = 1.0 - (this.age / this.lifetime);
-    }
-
-    draw(ctx) {
-        ctx.save();
-        ctx.globalAlpha = this.opacity;
-        ctx.fillStyle = this.color;
-        ctx.font = 'bold 28px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
-        ctx.fillText(this.text, this.x, this.y);
-        ctx.restore();
-    }
-
-    isDead() {
-        return this.age >= this.lifetime;
-    }
-}
-
-// MediaPipe Functions
-function initializeFaceMesh() {
-    faceMesh = new FaceMesh({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-    });
-
-    faceMesh.setOptions({
-        maxNumFaces: 1,
-        refineLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-    });
-
-    faceMesh.onResults(onFaceMeshResults);
-}
-
-function onFaceMeshResults(results) {
-    try {
-        canvasElement.width = window.innerWidth;
-        canvasElement.height = window.innerHeight;
-
-        if (!canvasElement.height || canvasElement.height === 0) return;
-
-        canvasCtx.save();
-        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-            const landmarks = results.multiFaceLandmarks[0];
-            const noseTip = landmarks[4];
-
-            const x = noseTip.x * window.innerWidth;
-            const y = noseTip.y * window.innerHeight;
-
-            gameState.nosePosition.x = x;
-            gameState.nosePosition.y = y;
-
-            if (gameState.isGameActive) {
-                drawGameElements();
-            } else {
-                drawNoseDot(x, y);
-            }
-        }
-
-        canvasCtx.restore();
-    } catch (error) {
-        console.error('FaceMesh error:', error);
-    }
-}
-
-function drawNoseDot(x, y) {
-    canvasCtx.beginPath();
-    canvasCtx.arc(x, y, gameState.noseRadius, 0, 2 * Math.PI);
-    canvasCtx.fillStyle = 'rgba(239, 68, 68, 0.3)';
-    canvasCtx.fill();
-
-    canvasCtx.beginPath();
-    canvasCtx.arc(x, y, gameState.noseRadius * 0.6, 0, 2 * Math.PI);
-    canvasCtx.fillStyle = '#ef4444';
-    canvasCtx.fill();
-
-    canvasCtx.beginPath();
-    canvasCtx.arc(x, y, gameState.noseRadius * 0.3, 0, 2 * Math.PI);
-    canvasCtx.fillStyle = '#fca5a5';
-    canvasCtx.fill();
-}
-
-// Game Functions
-function spawnFallingObject() {
-    const newObject = new FallingObject(window.innerWidth, gameState.speedMultiplier);
-    gameState.fallingObjects.push(newObject);
-}
-
-function gameLoop(timestamp) {
-    if (!gameState.isGameActive) return;
-
-    // Double safety check for canvas
-    if (!canvasElement.height || canvasElement.height === 0) return;
+async function initCamera() {
+    if (DOM.btnStartGame) DOM.btnStartGame.innerText = "Loading Camera...";
+    if (DOM.btnStartGame) DOM.btnStartGame.disabled = true;
 
     try {
-
-        if (timestamp - gameState.lastSpawnTime > gameState.spawnInterval) {
-            spawnFallingObject();
-            gameState.lastSpawnTime = timestamp;
-        }
-
-        gameState.fallingObjects.forEach(obj => obj.update());
-
-        gameState.fallingObjects = gameState.fallingObjects.filter(obj => {
-            if (obj.isOffScreen(window.innerHeight)) {
-                if (obj.type === 'good') {
-                    gameState.lives--;
-                    updateLivesDisplay();
-
-                    if (gameState.lives <= 0) {
-                        gameOver();
-                    }
-                }
-                return false;
-            }
-
-            const distance = Math.hypot(
-                gameState.nosePosition.x - obj.x,
-                gameState.nosePosition.y - obj.y
-            );
-
-            if (distance < (gameState.noseRadius + obj.radius)) {
-                if (obj.type === 'good') {
-                    gameState.score++;
-                    updateScoreDisplay();
-
-                    // Sound and haptic feedback
-                    soundManager.playScoreSound();
-                    if (navigator.vibrate) navigator.vibrate(50);
-
-                    const floatingText = new FloatingText(obj.x, obj.y, '+1', '#10b981');
-                    gameState.floatingTexts.push(floatingText);
-
-                    if (gameState.score % 10 === 0 && gameState.score > 0) {
-                        gameState.speedMultiplier *= 1.1;
-                        const levelUpText = new FloatingText(
-                            canvasElement.width / 2,
-                            canvasElement.height / 2,
-                            'SPEED UP!',
-                            '#f59e0b'
-                        );
-                        gameState.floatingTexts.push(levelUpText);
-                    }
-
-                    console.log(`💯 Score: ${gameState.score}`);
-                } else {
-                    gameState.lives -= 2;
-                    updateLivesDisplay();
-
-                    // Sound and haptic feedback
-                    soundManager.playDamageSound();
-                    if (navigator.vibrate) navigator.vibrate(200);
-
-                    const floatingText = new FloatingText(obj.x, obj.y, '-2 HP', '#ef4444');
-                    gameState.floatingTexts.push(floatingText);
-
-                    if (gameState.lives <= 0) {
-                        gameOver();
-                    }
-                }
-                return false;
-            }
-            return true;
-        });
-
-        gameState.floatingTexts.forEach(text => text.update());
-        gameState.floatingTexts = gameState.floatingTexts.filter(text => !text.isDead());
-
-    } catch (error) {
-        console.error('GameLoop error:', error);
-        return;
-    }
-
-    gameState.animationFrameId = requestAnimationFrame(gameLoop);
-}
-
-function drawGameElements() {
-    gameState.fallingObjects.forEach(obj => obj.draw(canvasCtx));
-    gameState.floatingTexts.forEach(text => text.draw(canvasCtx));
-    drawNoseDot(gameState.nosePosition.x, gameState.nosePosition.y);
-}
-
-function updateScoreDisplay() {
-    scoreValue.textContent = gameState.score;
-}
-
-function updateLivesDisplay() {
-    const hearts = livesDisplay.querySelectorAll('.heart');
-    hearts.forEach((heart, index) => {
-        if (index >= gameState.lives) {
-            heart.classList.add('lost');
-        } else {
-            heart.classList.remove('lost');
-        }
-    });
-}
-
-function startGame() {
-
-    function showCountdown() {
-        const overlay = document.getElementById(`countdownOverlay`);
-        const text = document.getElementById(`countdownText`);
-
-        if (!overlay || !text) {
-            gameState.isGameActive = true;
-            gameState.animationFrameId = requestAnimationFrame(gameLoop);
-            return;
-        }
-
-        // Wait for video to be fully ready
-        if (videoElement.readyState < 4) {
-            setTimeout(showCountdown, 100);
-            return;
-        }
-
-        text.textContent = `3`;
-        text.style.color = `white`;
-        overlay.classList.add('active');
-        let count = 3;
-
-        const interval = setInterval(() => {
-            count--;
-
-            if (count > 0) {
-                text.textContent = count;
-                text.style.animation = `none`;
-                setTimeout(() => text.style.animation = `pulse-scale 1s ease-in-out`, 10);
-            } else if (count === 0) {
-                text.textContent = `GO!`;
-                text.style.color = `#10b981`;
-                text.style.animation = `pulse-scale 0.5s ease-in-out`;
-            } else {
-                clearInterval(interval);
-                overlay.classList.remove('active');
-
-                gameState.isGameActive = true;
-                gameState.lastSpawnTime = performance.now();
-                gameState.animationFrameId = requestAnimationFrame(gameLoop);
-            }
-        }, 1000);
-    }
-
-
-    if (videoElement.readyState < 2) {
-        setTimeout(startGame, 100);
-        return;
-    }
-
-    // Initialize sound on first interaction
-    soundManager.init();
-
-    gameState.score = 0;
-    gameState.lives = gameState.maxLives;
-    gameState.isGameActive = false; // Countdown first`n    gameState.fallingObjects = [];
-    gameState.floatingTexts = [];
-    gameState.speedMultiplier = 1.0;
-    gameState.lastSpawnTime = performance.now();
-
-    updateScoreDisplay();
-    updateLivesDisplay();
-    scoreDisplay.style.display = 'flex';
-
-    // Reset save score form
-    if (saveScoreBtn) saveScoreBtn.disabled = false;
-    if (usernameInput) usernameInput.value = '';
-    if (saveMessage) {
-        saveMessage.textContent = '';
-        saveMessage.className = 'save-message';
-    }
-
-    showCountdown();
-}
-
-function stopGame() {
-    gameState.isGameActive = false;
-    gameState.fallingObjects = [];
-    gameState.floatingTexts = [];
-
-    if (gameState.animationFrameId) {
-        cancelAnimationFrame(gameState.animationFrameId);
-        gameState.animationFrameId = null;
-    }
-
-    scoreDisplay.style.display = 'none';
-}
-
-function gameOver() {
-    gameState.isGameActive = false;
-    if (gameState.animationFrameId) {
-        cancelAnimationFrame(gameState.animationFrameId);
-        gameState.animationFrameId = null;
-    }
-
-    // Game over sound
-    soundManager.playGameOverSound();
-
-    finalScoreValue.textContent = gameState.score;
-    gameOverOverlay.classList.add('active');
-}
-
-function restartGame() {
-    // Cancel any pending animation frames
-    if (gameState.animationFrameId) {
-        cancelAnimationFrame(gameState.animationFrameId);
-        gameState.animationFrameId = null;
-    }
-
-    gameOverOverlay.classList.remove('active');
-    gameState.score = 0;
-    gameState.lives = gameState.maxLives;
-    gameState.fallingObjects = [];
-    gameState.floatingTexts = [];
-    gameState.speedMultiplier = 1.0;
-    gameState.lastSpawnTime = performance.now();
-
-    updateScoreDisplay();
-    updateLivesDisplay();
-    startGame();
-}
-
-async function startCamera() {
-    try {
-        if (startButton) startButton.disabled = true;
-        if (startButton) startButton.textContent = 'Starting Camera...';
-
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                facingMode: 'user'
-            },
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: false
         });
 
-        videoElement.srcObject = stream;
-        await videoElement.play();
-        if (videoOverlay) videoOverlay.classList.add('hidden');
-        isStreamActive = true;
+        DOM.videoElement.srcObject = stream;
+        await new Promise(resolve => DOM.videoElement.onloadedmetadata = resolve);
 
-        if (!faceMesh) {
-            initializeFaceMesh();
-        }
+        GameState.isStreamReady = true;
 
-        camera = new Camera(videoElement, {
+        // Initialize MediaPipe
+        faceMesh = new FaceMesh({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+            }
+        });
+
+        faceMesh.setOptions({
+            maxNumFaces: 1,
+            refineLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        faceMesh.onResults(onFaceResults);
+
+        camera = new Camera(DOM.videoElement, {
             onFrame: async () => {
-                if (videoElement.readyState >= 4) {
-                    await faceMesh.send({ image: videoElement });
-                }
+                await faceMesh.send({ image: DOM.videoElement });
             },
             width: 1280,
             height: 720
         });
+
         camera.start();
 
-        updateButtonState();
-        startGame();
+        // Setup resizing
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Start Flow
+        startCountdown();
 
     } catch (error) {
-        console.error('❌ Camera start error:', error);
-        handleCameraError(error);
+        console.error("Camera Init Error:", error);
+        alert("Camera access denied or error. Please allow camera permissions.");
+        resetUI();
     }
 }
 
-function stopCamera() {
-    stopGame();
-
-    if (camera) {
-        camera.stop();
-        camera = null;
-    }
-
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        videoElement.srcObject = null;
-        stream = null;
-    }
-
-    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    videoOverlay.classList.remove('hidden');
-    isStreamActive = false;
-    updateButtonState();
+function resizeCanvas() {
+    DOM.canvasElement.width = window.innerWidth;
+    DOM.canvasElement.height = window.innerHeight;
 }
 
-function updateButtonState() {
-    // Button content logic is handled in HTML/CSS now primarily, 
-    // but we ensure it's enabled
-    startButton.disabled = false;
-    startButton.textContent = isStreamActive ? 'Stop Game' : 'Start Game';
+// 6. GAME LOOP & LOGIC
+function onFaceResults(results) {
+    // Clear canvas
+    const ctx = DOM.canvasElement.getContext('2d');
+    ctx.clearRect(0, 0, DOM.canvasElement.width, DOM.canvasElement.height);
 
-    // We recreate the inner HTML for the icon
-    if (isStreamActive) {
-        startButton.innerHTML = `
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="6" y="4" width="4" height="16"></rect>
-                <rect x="14" y="4" width="4" height="16"></rect>
-            </svg>
-            Stop Game
-        `;
+    // Draw Nose Tracking
+    let noseX = null, noseY = null;
+    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        const landmarks = results.multiFaceLandmarks[0];
+        // Nose tip is index 4
+        noseX = landmarks[4].x * DOM.canvasElement.width;
+        noseY = landmarks[4].y * DOM.canvasElement.height;
+
+        // Draw Dot
+        ctx.beginPath();
+        ctx.arc(noseX, noseY, 15, 0, 2 * Math.PI);
+        ctx.fillStyle = "#00f2ea";
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = "#00f2ea";
+        ctx.fill();
+    }
+
+    if (GameState.isActive) {
+        updateGame(ctx, noseX, noseY);
+    }
+}
+
+function updateGame(ctx, noseX, noseY) {
+    // Spawn Objects
+    if (performance.now() - GameState.lastSpawnTime > GameState.spawnInterval) {
+        spawnObject();
+        GameState.lastSpawnTime = performance.now();
+    }
+
+    // Update & Draw Objects
+    GameState.fallingObjects.forEach((obj, index) => {
+        obj.y += obj.speed * GameState.speedMultiplier;
+
+        // Draw Object
+        ctx.beginPath();
+        ctx.arc(obj.x, obj.y, obj.radius, 0, 2 * Math.PI);
+        ctx.fillStyle = obj.type === 'bad' ? '#ff0050' : '#00f2ea';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.fill();
+
+        // Add icon/emoji inside
+        ctx.fillStyle = "#fff";
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(obj.type === 'bad' ? "💣" : "💎", obj.x, obj.y);
+
+        // Collision
+        if (noseX && Math.hypot(noseX - obj.x, noseY - obj.y) < obj.radius + 15) {
+            handleCollision(index, obj.type);
+        }
+
+        // Remove Off-screen
+        if (obj.y > DOM.canvasElement.height) {
+            GameState.fallingObjects.splice(index, 1);
+        }
+    });
+}
+
+function spawnObject() {
+    const type = Math.random() > 0.3 ? 'good' : 'bad';
+    GameState.fallingObjects.push({
+        x: Math.random() * (DOM.canvasElement.width - 50) + 25,
+        y: -50,
+        radius: 25,
+        type: type,
+        speed: Math.random() * 3 + 2
+    });
+}
+
+function handleCollision(index, type) {
+    GameState.fallingObjects.splice(index, 1);
+
+    if (type === 'good') {
+        GameState.score += 10;
+        soundManager.playScore();
+        updateHUD();
+
+        // Increase difficulty
+        if (GameState.score % 50 === 0) {
+            GameState.speedMultiplier += 0.1;
+            GameState.spawnInterval = Math.max(400, GameState.spawnInterval - 50);
+        }
     } else {
-        startButton.innerHTML = `
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z"/>
-            </svg>
-            Start Game
-        `;
+        GameState.lives--;
+        soundManager.playDamage();
+        updateHUD();
+        if (GameState.lives <= 0) endGame();
     }
 }
 
-function handleCameraError(error) {
-    let errorMessage = 'Failed to start camera. ';
-    // ... error handling logic same as before ...
-    alert(errorMessage + error.message);
-    startButton.disabled = false;
-    updateButtonState();
+function updateHUD() {
+    DOM.scoreValue.textContent = GameState.score;
+    // Update Hearts
+    const hearts = DOM.livesDisplay.children;
+    for (let i = 0; i < 3; i++) {
+        hearts[i].style.opacity = i < GameState.lives ? "1" : "0.2";
+    }
 }
 
-// ===== FIREBASE LEADERBOARD FUNCTIONS =====
+// 7. FLOW CONTROL FUNCTIONS
+function startCountdown() {
+    // Hide all menus, show game screen
+    DOM.menuScreen.classList.add('hidden');
+    DOM.gameOverModal.classList.add('hidden');
+    DOM.leaderboardScreen.classList.add('hidden');
+    DOM.gameScreen.classList.remove('hidden');
 
-/**
- * Saves the user score to Firestore
- */
-async function saveScore(username, score) {
-    if (!username || username.trim() === ``) {
-        showToast(`Please enter a name!`, `error`);
+    DOM.countdownOverlay.classList.remove('hidden');
+    DOM.countdownText.textContent = "3";
+
+    let count = 3;
+    const interval = setInterval(() => {
+        count--;
+        if (count > 0) {
+            DOM.countdownText.textContent = count;
+        } else if (count === 0) {
+            DOM.countdownText.textContent = "GO!";
+        } else {
+            clearInterval(interval);
+            DOM.countdownOverlay.classList.add('hidden');
+            GameState.isActive = true;
+            GameState.lastSpawnTime = performance.now();
+        }
+    }, 1000);
+}
+
+function endGame() {
+    GameState.isActive = false;
+    soundManager.playGameOver();
+
+    DOM.finalScoreValue.textContent = GameState.score;
+    DOM.gameOverModal.classList.remove('hidden');
+
+    // Reset inputs
+    if (DOM.saveScoreBtn) DOM.saveScoreBtn.disabled = false;
+    if (DOM.saveMessage) DOM.saveMessage.textContent = "";
+}
+
+function resetGame() {
+    GameState.score = 0;
+    GameState.lives = GameState.maxLives;
+    GameState.fallingObjects = [];
+    GameState.speedMultiplier = 1.0;
+    updateHUD();
+    startCountdown();
+}
+
+function resetUI() {
+    DOM.menuScreen.classList.remove('hidden');
+    DOM.gameScreen.classList.add('hidden');
+    DOM.leaderboardScreen.classList.add('hidden');
+    DOM.gameOverModal.classList.add('hidden');
+
+    if (DOM.btnStartGame) {
+        DOM.btnStartGame.innerText = "PLAY NOW";
+        DOM.btnStartGame.disabled = false;
+    }
+}
+
+// 8. FIREBASE LEADERBOARD ACTIONS
+async function saveScore() {
+    const username = DOM.usernameInput.value.trim();
+    if (!username) {
+        alert("Please enter a name!");
         return;
     }
 
-    try {
-        saveScoreBtn.disabled = true;
-        saveScoreBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`;
+    DOM.btnSaveScore.disabled = true;
+    DOM.btnSaveScore.innerText = "Saving...";
 
+    try {
         await addDoc(collection(db, "scores"), {
-            username: username.trim(),
-            score: score,
+            username: username,
+            score: GameState.score,
             timestamp: new Date()
         });
-
-        saveScoreBtn.innerHTML = `<i class="fa-solid fa-check"></i> Saved!`;
-        saveScoreBtn.style.background = `#10b981`;
-        showToast(`Score saved successfully!`, `success`);
-
-        setTimeout(() => {
-            returnToMenu();
-            setTimeout(() => window.openLeaderboard(), 300);
-        }, 1500);
-
-    } catch (error) {
-        console.error("Error saving score:", error);
-        showToast(`Failed to save score`, `error`);
-        saveScoreBtn.disabled = false;
-        saveScoreBtn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save Score`;
+        DOM.saveMessage.textContent = "Saved Successfully!";
+        DOM.saveMessage.style.color = "#00f2ea";
+    } catch (e) {
+        console.warn("Firestore Error:", e);
+        DOM.saveMessage.textContent = "Error Saving (Check Console)";
+        DOM.saveMessage.style.color = "#ff0050";
     }
 }
 
-/**
- * Loads leaderboard data from Firestore
- */
 async function loadLeaderboard() {
-    leaderboardList.innerHTML = `
-        <div class="loading-spinner">
-            <i class="fa-solid fa-circle-notch fa-spin"></i> Loading...
-        </div>
-    `;
+    DOM.leaderboardList.innerHTML = '<div class="loading-spinner">Loading...</div>';
 
     try {
         const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(10));
-        const querySnapshot = await getDocs(q);
+        const snapshot = await getDocs(q);
 
-        leaderboardList.innerHTML = '';
-
-        if (querySnapshot.empty) {
-            leaderboardList.innerHTML = '<div style="text-align: center; color: var(--text-secondary);">No scores yet. Be the first!</div>';
-            return;
-        }
-
+        DOM.leaderboardList.innerHTML = "";
         let rank = 1;
-        querySnapshot.forEach((doc) => {
+        snapshot.forEach(doc => {
             const data = doc.data();
-            const date = data.timestamp ? new Date(data.timestamp.seconds * 1000).toLocaleDateString() : '';
-
-            const item = document.createElement('div');
-            item.className = 'leaderboard-item';
-
-            let rankIcon = rank;
-            if (rank === 1) rankIcon = '🥇';
-            if (rank === 2) rankIcon = '🥈';
-            if (rank === 3) rankIcon = '🥉';
-
-            item.innerHTML = `
-                <div class="rank">${rankIcon}</div>
-                <div class="player-info">
-                    <span class="player-name">${data.username}</span>
-                    <span class="player-date">${date}</span>
-                </div>
-                <div class="player-score">${data.score}</div>
+            const div = document.createElement('div');
+            div.className = "leaderboard-item glass-pill";
+            div.style.marginBottom = "10px";
+            div.style.justifyContent = "space-between";
+            div.innerHTML = `
+                <span style="color:var(--color-cyan); font-weight:bold;">#${rank}</span>
+                <span>${data.username}</span>
+                <span style="font-weight:bold;">${data.score}</span>
             `;
-
-            leaderboardList.appendChild(item);
+            DOM.leaderboardList.appendChild(div);
             rank++;
         });
 
-    } catch (error) {
-        console.error("Error loading leaderboard: ", error);
-        leaderboardList.innerHTML = '<div style="text-align: center; color: var(--accent-pink);">Failed to load leaderboard.</div>';
+    } catch (e) {
+        console.warn("Leaderboard Error:", e);
+        DOM.leaderboardList.innerHTML = "Error loading scores.";
     }
 }
 
-// ===== NAVIGATION FUNCTIONS =====
+// 9. EVENT LISTENERS
+// Init Game
+if (DOM.btnStartGame) DOM.btnStartGame.addEventListener('click', initCamera);
 
-// Expose functions to window (since we are a module now)
-window.initGame = function (gameName) {
-    menuScreen.style.display = 'none';
-    if (leaderboardScreen) leaderboardScreen.style.display = 'none';
-    gameScreen.style.display = 'flex';
-    startCamera();
-};
-
-window.openLeaderboard = function () {
-    menuScreen.style.display = 'none';
-    leaderboardScreen.style.display = 'flex';
+// Navigation
+if (DOM.btnOpenLeaderboard) DOM.btnOpenLeaderboard.addEventListener('click', () => {
+    DOM.menuScreen.classList.add('hidden');
+    DOM.leaderboardScreen.classList.remove('hidden');
     loadLeaderboard();
-};
-
-function returnToMenu() {
-    stopCamera();
-    gameOverOverlay.classList.remove('active');
-    if (gameScreen) gameScreen.style.display = 'none';
-    if (leaderboardScreen) leaderboardScreen.style.display = 'none';
-    if (menuScreen) menuScreen.style.display = 'flex';
-}
-
-// Event Listeners
-startButton.addEventListener('click', () => {
-    if (isStreamActive) stopCamera();
-    else startCamera();
+});
+if (DOM.btnCloseLeaderboard) DOM.btnCloseLeaderboard.addEventListener('click', () => {
+    DOM.leaderboardScreen.classList.add('hidden');
+    DOM.menuScreen.classList.remove('hidden');
+});
+if (DOM.btnRestartGame) DOM.btnRestartGame.addEventListener('click', resetGame);
+if (DOM.btnHome) DOM.btnHome.addEventListener('click', () => {
+    GameState.isActive = false;
+    resetUI();
 });
 
-restartButton.addEventListener('click', restartGame);
-menuButton.addEventListener('click', returnToMenu);
-menuButtonGameOver.addEventListener('click', returnToMenu);
-
-// Leaderboard Event Listeners
-openLeaderboardBtn.addEventListener('click', window.openLeaderboard);
-leaderboardBackBtn.addEventListener('click', returnToMenu);
-
-saveScoreBtn.addEventListener('click', () => {
-    saveScore(usernameInput.value, gameState.score);
+// Sound
+if (DOM.muteBtn) DOM.muteBtn.addEventListener('click', () => {
+    soundManager.muted = !soundManager.muted;
+    DOM.muteBtn.innerHTML = soundManager.muted ? '<i class="fa-solid fa-volume-xmark"></i>' : '<i class="fa-solid fa-volume-high"></i>';
 });
 
-// Video Error
-videoElement.addEventListener('error', (e) => {
-    console.error('Video element error:', e);
+// Save & Share
+if (DOM.btnSaveScore) DOM.btnSaveScore.addEventListener('click', saveScore);
+if (DOM.btnShareScore) DOM.btnShareScore.addEventListener('click', async () => {
+    const text = `I scored ${GameState.score} in ChatGames! Can you beat me? 🎮`;
+    try {
+        if (navigator.share) {
+            await navigator.share({ title: 'ChatGames', text: text, url: window.location.href });
+        } else {
+            await navigator.clipboard.writeText(text);
+            alert("Score copied to clipboard!");
+        }
+    } catch (e) {
+        console.log("Share failed/cancelled");
+    }
 });
 
-console.log('🎮 ChatGames Platform loaded - v0.4.0 (Firebase Integrated)');
+// Run once on load
+console.log("ChatGames v0.9.3 Loaded (Refactor)");
