@@ -362,7 +362,10 @@ function restartGame() {
 
     // Start game
     startGame();
-}\r\n\r\n/**\r\n * Starts the camera and gets video stream
+}
+
+/**
+ * Starts the camera and gets video stream
  */
 async function startCamera() {
     try {
@@ -559,4 +562,4 @@ videoElement.addEventListener('error', (e) => {
 
 // Set initial state
 scoreDisplay.style.display = 'none'; // Hide score initially
-console.log('🎮 ChatGames loaded - v0.1.1 Alpha');
+console.log('🎮 ChatGames loaded - v0.1.2');
