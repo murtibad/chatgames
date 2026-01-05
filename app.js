@@ -416,6 +416,8 @@ function showCountdown() {
         return;
     }
     
+    text.textContent = '3';
+    text.style.color = '#25F4EE';
     overlay.style.display = 'flex';
     let count = 3;
     text.textContent = count;
