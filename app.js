@@ -406,42 +406,40 @@ function updateLivesDisplay() {
 function startGame() {
 
 function showCountdown() {
+    const overlay = document.getElementById('countdownOverlay');
+    const text = document.getElementById('countdownText');
+    
+    if (!overlay || !text) {
+        // Fallback if elements missing
+        gameState.isGameActive = true;
+        gameState.animationFrameId = requestAnimationFrame(gameLoop);
+        return;
+    }
+    
+    overlay.style.display = 'flex';
     let count = 3;
+    text.textContent = count;
     
     const interval = setInterval(() => {
-        gameState.floatingTexts = [];
+        count--;
         
         if (count > 0) {
-            const text = new FloatingText(
-                canvasElement.width / 2,
-                canvasElement.height / 2,
-                count.toString(),
-                `#25F4EE`
-            );
-            text.lifetime = 60;
-            text.update = function() {};
-            gameState.floatingTexts.push(text);
-            count--;
+            text.textContent = count;
+        } else if (count === 0) {
+            text.textContent = 'GO!';
+            text.style.color = '#10b981';
         } else {
-            const goText = new FloatingText(
-                canvasElement.width / 2,
-                canvasElement.height / 2,
-                `GO!`,
-                `#10b981`
-            );
-            goText.lifetime = 30;
-            goText.update = function() {};
-            gameState.floatingTexts.push(goText);
-            
+            // Countdown finished
             clearInterval(interval);
+            overlay.style.display = 'none';
             
-            setTimeout(() => {
-                gameState.isGameActive = true;
-                gameState.lastSpawnTime = performance.now();
-                gameState.animationFrameId = requestAnimationFrame(gameLoop);
-            }, 500);
+            // NOW start the game
+            gameState.isGameActive = true;
+            gameState.lastSpawnTime = performance.now();
+            gameState.animationFrameId = requestAnimationFrame(gameLoop);
         }
     }, 1000);
+}, 1000);
     
     function animate() {
         if (!gameState.isGameActive || gameState.floatingTexts.length > 0) {
