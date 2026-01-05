@@ -251,32 +251,32 @@ function initializeFaceMesh() {
 
 function onFaceMeshResults(results) {
     try {
-    canvasElement.width = videoElement.videoWidth;
-    canvasElement.height = videoElement.videoHeight;
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
 
-    if (!canvasElement.height || canvasElement.height === 0) return;
+        if (!canvasElement.height || canvasElement.height === 0) return;
 
-    canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        const landmarks = results.multiFaceLandmarks[0];
-        const noseTip = landmarks[4];
+        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+            const landmarks = results.multiFaceLandmarks[0];
+            const noseTip = landmarks[4];
 
-        const x = noseTip.x * canvasElement.width;
-        const y = noseTip.y * canvasElement.height;
+            const x = noseTip.x * canvasElement.width;
+            const y = noseTip.y * canvasElement.height;
 
-        gameState.nosePosition.x = x;
-        gameState.nosePosition.y = y;
+            gameState.nosePosition.x = x;
+            gameState.nosePosition.y = y;
 
-        if (gameState.isGameActive) {
-            drawGameElements();
-        } else {
-            drawNoseDot(x, y);
+            if (gameState.isGameActive) {
+                drawGameElements();
+            } else {
+                drawNoseDot(x, y);
+            }
         }
-    }
 
-    canvasCtx.restore();
+        canvasCtx.restore();
     } catch (error) {
         console.error('FaceMesh error:', error);
     }
@@ -313,79 +313,79 @@ function gameLoop(timestamp) {
 
     try {
 
-    if (timestamp - gameState.lastSpawnTime > gameState.spawnInterval) {
-        spawnFallingObject();
-        gameState.lastSpawnTime = timestamp;
-    }
-
-    gameState.fallingObjects.forEach(obj => obj.update());
-
-    gameState.fallingObjects = gameState.fallingObjects.filter(obj => {
-        if (obj.isOffScreen(canvasElement.height)) {
-            if (obj.type === 'good') {
-                gameState.lives--;
-                updateLivesDisplay();
-
-                if (gameState.lives <= 0) {
-                    gameOver();
-                }
-            }
-            return false;
+        if (timestamp - gameState.lastSpawnTime > gameState.spawnInterval) {
+            spawnFallingObject();
+            gameState.lastSpawnTime = timestamp;
         }
 
-        const distance = Math.hypot(
-            gameState.nosePosition.x - obj.x,
-            gameState.nosePosition.y - obj.y
-        );
+        gameState.fallingObjects.forEach(obj => obj.update());
 
-        if (distance < (gameState.noseRadius + obj.radius)) {
-            if (obj.type === 'good') {
-                gameState.score++;
-                updateScoreDisplay();
+        gameState.fallingObjects = gameState.fallingObjects.filter(obj => {
+            if (obj.isOffScreen(canvasElement.height)) {
+                if (obj.type === 'good') {
+                    gameState.lives--;
+                    updateLivesDisplay();
 
-                // Sound and haptic feedback
-                soundManager.playScoreSound();
-                if (navigator.vibrate) navigator.vibrate(50);
-
-                const floatingText = new FloatingText(obj.x, obj.y, '+1', '#10b981');
-                gameState.floatingTexts.push(floatingText);
-
-                if (gameState.score % 10 === 0 && gameState.score > 0) {
-                    gameState.speedMultiplier *= 1.1;
-                    const levelUpText = new FloatingText(
-                        canvasElement.width / 2,
-                        canvasElement.height / 2,
-                        'SPEED UP!',
-                        '#f59e0b'
-                    );
-                    gameState.floatingTexts.push(levelUpText);
+                    if (gameState.lives <= 0) {
+                        gameOver();
+                    }
                 }
-
-                console.log(`💯 Score: ${gameState.score}`);
-            } else {
-                gameState.lives -= 2;
-                updateLivesDisplay();
-
-                // Sound and haptic feedback
-                soundManager.playDamageSound();
-                if (navigator.vibrate) navigator.vibrate(200);
-
-                const floatingText = new FloatingText(obj.x, obj.y, '-2 HP', '#ef4444');
-                gameState.floatingTexts.push(floatingText);
-
-                if (gameState.lives <= 0) {
-                    gameOver();
-                }
+                return false;
             }
-            return false;
-        }
-        return true;
-    });
 
-    gameState.floatingTexts.forEach(text => text.update());
-    gameState.floatingTexts = gameState.floatingTexts.filter(text => !text.isDead());
+            const distance = Math.hypot(
+                gameState.nosePosition.x - obj.x,
+                gameState.nosePosition.y - obj.y
+            );
 
-        } catch (error) {
+            if (distance < (gameState.noseRadius + obj.radius)) {
+                if (obj.type === 'good') {
+                    gameState.score++;
+                    updateScoreDisplay();
+
+                    // Sound and haptic feedback
+                    soundManager.playScoreSound();
+                    if (navigator.vibrate) navigator.vibrate(50);
+
+                    const floatingText = new FloatingText(obj.x, obj.y, '+1', '#10b981');
+                    gameState.floatingTexts.push(floatingText);
+
+                    if (gameState.score % 10 === 0 && gameState.score > 0) {
+                        gameState.speedMultiplier *= 1.1;
+                        const levelUpText = new FloatingText(
+                            canvasElement.width / 2,
+                            canvasElement.height / 2,
+                            'SPEED UP!',
+                            '#f59e0b'
+                        );
+                        gameState.floatingTexts.push(levelUpText);
+                    }
+
+                    console.log(`💯 Score: ${gameState.score}`);
+                } else {
+                    gameState.lives -= 2;
+                    updateLivesDisplay();
+
+                    // Sound and haptic feedback
+                    soundManager.playDamageSound();
+                    if (navigator.vibrate) navigator.vibrate(200);
+
+                    const floatingText = new FloatingText(obj.x, obj.y, '-2 HP', '#ef4444');
+                    gameState.floatingTexts.push(floatingText);
+
+                    if (gameState.lives <= 0) {
+                        gameOver();
+                    }
+                }
+                return false;
+            }
+            return true;
+        });
+
+        gameState.floatingTexts.forEach(text => text.update());
+        gameState.floatingTexts = gameState.floatingTexts.filter(text => !text.isDead());
+
+    } catch (error) {
         console.error('GameLoop error:', error);
         return;
     }
@@ -417,47 +417,47 @@ function updateLivesDisplay() {
 function startGame() {
 
     function showCountdown() {
-    const overlay = document.getElementById(`countdownOverlay`);
-    const text = document.getElementById(`countdownText`);
-    
-    if (!overlay || !text) {
-        gameState.isGameActive = true;
-        gameState.animationFrameId = requestAnimationFrame(gameLoop);
-        return;
-    }
-    
-    // Wait for video to be fully ready
-    if (videoElement.readyState < 4) {
-        setTimeout(showCountdown, 100);
-        return;
-    }
-    
-    text.textContent = `3`;
-    text.style.color = `white`;
-    overlay.style.display = `flex`;
-    let count = 3;
-    
-    const interval = setInterval(() => {
-        count--;
-        
-        if (count > 0) {
-            text.textContent = count;
-            text.style.animation = `none`;
-            setTimeout(() => text.style.animation = `pulse-scale 1s ease-in-out`, 10);
-        } else if (count === 0) {
-            text.textContent = `GO!`;
-            text.style.color = `#10b981`;
-            text.style.animation = `pulse-scale 0.5s ease-in-out`;
-        } else {
-            clearInterval(interval);
-            overlay.style.display = `none`;
-            
+        const overlay = document.getElementById(`countdownOverlay`);
+        const text = document.getElementById(`countdownText`);
+
+        if (!overlay || !text) {
             gameState.isGameActive = true;
-            gameState.lastSpawnTime = performance.now();
             gameState.animationFrameId = requestAnimationFrame(gameLoop);
+            return;
         }
-    }, 1000);
-}
+
+        // Wait for video to be fully ready
+        if (videoElement.readyState < 4) {
+            setTimeout(showCountdown, 100);
+            return;
+        }
+
+        text.textContent = `3`;
+        text.style.color = `white`;
+        overlay.style.display = `flex`;
+        let count = 3;
+
+        const interval = setInterval(() => {
+            count--;
+
+            if (count > 0) {
+                text.textContent = count;
+                text.style.animation = `none`;
+                setTimeout(() => text.style.animation = `pulse-scale 1s ease-in-out`, 10);
+            } else if (count === 0) {
+                text.textContent = `GO!`;
+                text.style.color = `#10b981`;
+                text.style.animation = `pulse-scale 0.5s ease-in-out`;
+            } else {
+                clearInterval(interval);
+                overlay.style.display = `none`;
+
+                gameState.isGameActive = true;
+                gameState.lastSpawnTime = performance.now();
+                gameState.animationFrameId = requestAnimationFrame(gameLoop);
+            }
+        }, 1000);
+    }
 
 
     if (videoElement.readyState < 2) {
@@ -563,7 +563,7 @@ async function startCamera() {
         camera = new Camera(videoElement, {
             onFrame: async () => {
                 if (videoElement.readyState >= 4) {
-                                    await faceMesh.send({ image: videoElement });
+                    await faceMesh.send({ image: videoElement });
                 }
             },
             width: 1280,
@@ -657,7 +657,7 @@ async function saveScore(username, score) {
         saveScoreBtn.innerHTML = `<i class="fa-solid fa-check"></i> Saved!`;
         saveScoreBtn.style.background = `#10b981`;
         showToast(`Score saved successfully!`, `success`);
-        
+
         setTimeout(() => {
             returnToMenu();
             setTimeout(() => window.openLeaderboard(), 300);
@@ -669,16 +669,6 @@ async function saveScore(username, score) {
         saveScoreBtn.disabled = false;
         saveScoreBtn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save Score`;
     }
-} catch (error) {
-        console.error("Error saving score: ", error);
-        showSaveMessage('Error saving score. Try again.', 'error');
-        saveScoreBtn.disabled = false;
-    }
-}
-
-function showSaveMessage(message, type) {
-    saveMessage.textContent = message;
-    saveMessage.className = `save-message ${type}`;
 }
 
 /**
