@@ -574,3 +574,51 @@ footer {
 .save-message.error {
     color: var(--accent-pink);
 }
+
+/* ===== Mute & Share Buttons ===== */
+.btn-mute {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-subtle);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    z-index: 1000;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+}
+
+.btn-mute:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--accent-cyan);
+}
+
+.btn-share {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+    color: var(--bg-app);
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--font-family);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    margin-bottom: 12px;
+}
+
+.btn-share:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+}

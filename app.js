@@ -50,6 +50,66 @@ let isStreamActive = false;
 let faceMesh = null;
 let camera = null;
 
+// ===== SOUND MANAGER (Synthesized Audio) =====
+class SoundManager {
+    constructor() {
+        this.audioContext = null;
+        this.isMuted = false;
+    }
+
+    init() {
+        // Initialize AudioContext on first user interaction
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    playTone(frequency, duration, waveType = 'sine', volume = 0.3) {
+        if (this.isMuted || !this.audioContext) return;
+
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+
+        oscillator.frequency.value = frequency;
+        oscillator.type = waveType;
+
+        gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + duration);
+    }
+
+    playScoreSound() {
+        // Sweet 'Ding' sound (sine wave)
+        this.playTone(800, 0.1, 'sine', 0.2);
+        setTimeout(() => this.playTone(1000, 0.1, 'sine', 0.15), 50);
+    }
+
+    playDamageSound() {
+        // Deep 'Buzz' sound (sawtooth wave)
+        this.playTone(150, 0.3, 'sawtooth', 0.3);
+    }
+
+    playGameOverSound() {
+        // Sad descending melody
+        this.playTone(400, 0.3, 'sine', 0.2);
+        setTimeout(() => this.playTone(350, 0.3, 'sine', 0.2), 300);
+        setTimeout(() => this.playTone(300, 0.5, 'sine', 0.2), 600);
+    }
+
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        return this.isMuted;
+    }
+}
+
+const soundManager = new SoundManager();
+
+
 // ===== GAME STATE =====
 const gameState = {
     score: 0,
@@ -274,6 +334,10 @@ function gameLoop(timestamp) {
                 gameState.score++;
                 updateScoreDisplay();
 
+                // Sound and haptic feedback
+                soundManager.playScoreSound();
+                if (navigator.vibrate) navigator.vibrate(50);
+
                 const floatingText = new FloatingText(obj.x, obj.y, '+1', '#10b981');
                 gameState.floatingTexts.push(floatingText);
 
@@ -292,6 +356,10 @@ function gameLoop(timestamp) {
             } else {
                 gameState.lives -= 2;
                 updateLivesDisplay();
+
+                // Sound and haptic feedback
+                soundManager.playDamageSound();
+                if (navigator.vibrate) navigator.vibrate(200);
 
                 const floatingText = new FloatingText(obj.x, obj.y, '-2 HP', '#ef4444');
                 gameState.floatingTexts.push(floatingText);
@@ -338,6 +406,9 @@ function startGame() {
         return;
     }
 
+    // Initialize sound on first interaction
+    soundManager.init();
+
     gameState.score = 0;
     gameState.lives = gameState.maxLives;
     gameState.isGameActive = true;
@@ -348,7 +419,7 @@ function startGame() {
 
     updateScoreDisplay();
     updateLivesDisplay();
-    scoreDisplay.style.display = 'flex'; // Changed to flex to fix layout
+    scoreDisplay.style.display = 'flex';
 
     // Reset save score form
     if (saveScoreBtn) saveScoreBtn.disabled = false;
@@ -380,6 +451,9 @@ function gameOver() {
         cancelAnimationFrame(gameState.animationFrameId);
         gameState.animationFrameId = null;
     }
+
+    // Game over sound
+    soundManager.playGameOverSound();
 
     finalScoreValue.textContent = gameState.score;
     gameOverOverlay.classList.add('active');
