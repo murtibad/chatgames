@@ -43,6 +43,25 @@ const saveScoreBtn = document.getElementById('saveScoreBtn');
 const usernameInput = document.getElementById('usernameInput');
 const saveMessage = document.getElementById('saveMessage');
 
+
+// ===== CANVAS RESIZE SYNCHRONIZATION =====
+function syncCanvasSize() {
+    if (canvasElement) {
+        canvasElement.width = window.innerWidth;
+        canvasElement.height = window.innerHeight;
+    }
+}
+
+// Initial sync
+syncCanvasSizeif (canvasElement) {
+   ;
+}
+
+// Sync on resize
+window.addEventListener(`resize`, () => {
+    syncCanvasSize();
+});
+
 const canvasCtx = canvasElement.getContext('2d', { willReadFrequently: true });
 
 let stream = null;
@@ -251,8 +270,8 @@ function initializeFaceMesh() {
 
 function onFaceMeshResults(results) {
     try {
-        canvasElement.width = videoElement.videoWidth;
-        canvasElement.height = videoElement.videoHeight;
+        canvasElement.width = window.innerWidth;
+        canvasElement.height = window.innerHeight;
 
         if (!canvasElement.height || canvasElement.height === 0) return;
 
@@ -263,8 +282,8 @@ function onFaceMeshResults(results) {
             const landmarks = results.multiFaceLandmarks[0];
             const noseTip = landmarks[4];
 
-            const x = noseTip.x * canvasElement.width;
-            const y = noseTip.y * canvasElement.height;
+            const x = noseTip.x * window.innerWidth;
+            const y = noseTip.y * window.innerHeight;
 
             gameState.nosePosition.x = x;
             gameState.nosePosition.y = y;
@@ -301,7 +320,7 @@ function drawNoseDot(x, y) {
 
 // Game Functions
 function spawnFallingObject() {
-    const newObject = new FallingObject(canvasElement.width, gameState.speedMultiplier);
+    const newObject = new FallingObject(window.innerWidth, gameState.speedMultiplier);
     gameState.fallingObjects.push(newObject);
 }
 
@@ -321,7 +340,7 @@ function gameLoop(timestamp) {
         gameState.fallingObjects.forEach(obj => obj.update());
 
         gameState.fallingObjects = gameState.fallingObjects.filter(obj => {
-            if (obj.isOffScreen(canvasElement.height)) {
+            if (obj.isOffScreen(window.innerHeight)) {
                 if (obj.type === 'good') {
                     gameState.lives--;
                     updateLivesDisplay();
