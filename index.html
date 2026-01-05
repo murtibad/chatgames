@@ -4,19 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ChatGames - Social Flux</title>
-
-    <!-- Meta Tags -->
-    <meta name="description" content="Play interactive camera-based games.">
-
-    <!-- Google Fonts: Outfit -->
+    <title>ChatGames</title>
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;900&display=swap" rel="stylesheet">
-
-    <!-- FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
     <!-- MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
@@ -24,7 +18,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
         crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
-
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -33,112 +26,56 @@
     <!-- 1. Background Layer -->
     <video id="videoElement" autoplay playsinline muted></video>
     <canvas id="canvasElement"></canvas>
-    <div id="vignette-overlay"></div>
 
-    <!-- 2. Global UI Elements -->
-    <button id="mute-btn" class="glass-icon-btn">
-        <i class="fa-solid fa-volume-high"></i>
-    </button>
+    <!-- 2. Global UI (Outside UI Layer) -->
+    <button id="mute-btn"><i class="fa-solid fa-volume-high"></i></button>
+    <div id="score-hud" class="hidden">
+        SCORE: <span id="score-val">0</span> | ❤️ <span id="lives-val">3</span>
+    </div>
 
-    <!-- 3. Screens -->
+    <!-- 3. UI Layer (Center Content) -->
+    <div id="ui-layer">
 
-    <!-- MENU SCREEN -->
-    <div id="menu-screen" class="screen-container">
-        <div class="glass-panel main-menu">
-            <h1 class="app-title">ChatGames</h1>
-            <p class="app-subtitle">Face Tracking Arcade</p>
-
-            <div class="game-select-card" id="btn-select-nosehunter">
-                <div class="icon-wrapper">
-                    <i class="fa-solid fa-face-grin-wide"></i>
-                </div>
+        <!-- MENU SCREEN -->
+        <div id="menu-screen" class="glass-panel">
+            <h1 class="title">ChatGames</h1>
+            <p>Face Tracking Arcade</p>
+            <div class="card">
+                <i class="fa-solid fa-face-grin-wide icon-lg"></i>
                 <h3>Nose Hunter</h3>
                 <p>Catch points, avoid bombs!</p>
-                <button class="btn-primary" id="btn-start-game">PLAY NOW</button>
+                <button id="btn-start" class="btn-primary">PLAY NOW</button>
             </div>
-
-            <button class="btn-secondary" id="btn-open-leaderboard">
-                <i class="fa-solid fa-trophy"></i> Leaderboard
-            </button>
         </div>
 
-        <div class="privacy-note">
-            <i class="fa-solid fa-shield-halved"></i> No images are sent to server. Processing is local.
+        <!-- GAME OVER SCREEN -->
+        <div id="game-over-screen" class="glass-panel hidden">
+            <h2>GAME OVER</h2>
+            <div class="score-box">
+                SCORE<br>
+                <span id="final-score">0</span>
+            </div>
+            <input type="text" id="username-input" placeholder="Your Name" maxlength="12">
+            <button id="btn-save" class="btn-primary">SAVE SCORE</button>
+            <div id="save-msg"></div>
+
+            <div class="row">
+                <button id="btn-share" class="btn-secondary">SHARE</button>
+                <button id="btn-restart" class="btn-secondary">RESTART</button>
+            </div>
         </div>
+
+        <!-- GAME SCREEN (Minimal, mainly for state logic) -->
+        <div id="game-screen" class="hidden"></div>
+
     </div>
 
-    <!-- GAME SCREEN -->
-    <div id="game-screen" class="screen-container hidden">
-        <!-- HUD -->
-        <div id="score-display" class="glass-pill">
-            <span class="score-label">SCORE</span>
-            <span id="score-value">0</span>
-            <div id="lives-display">
-                <i class="fa-solid fa-heart"></i>
-                <i class="fa-solid fa-heart"></i>
-                <i class="fa-solid fa-heart"></i>
-            </div>
-        </div>
-
-        <!-- In-game Controls -->
-        <!-- (Optional: Pause button could go here) -->
-    </div>
-
-    <!-- LEADERBOARD SCREEN -->
-    <div id="leaderboard-screen" class="screen-container hidden">
-        <div class="glass-panel leaderboard-panel">
-            <div class="panel-header">
-                <i class="fa-solid fa-trophy gold-icon"></i>
-                <h2>Top Players</h2>
-            </div>
-
-            <div id="leaderboard-list" class="scrollable-list">
-                <div class="loading-spinner"><i class="fa-solid fa-rotate fa-spin"></i> Loading...</div>
-            </div>
-
-            <div class="panel-footer">
-                <button class="btn-secondary" id="btn-close-leaderboard">Back</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 4. Overlays -->
-
-    <!-- COUNTDOWN OVERLAY -->
-    <div id="countdown-overlay" class="overlay hidden">
+    <!-- 4. Overlay -->
+    <div id="countdown-overlay" class="hidden">
         <div id="countdown-text">3</div>
     </div>
 
-    <!-- GAME OVER MODAL -->
-    <div id="game-over-modal" class="overlay hidden">
-        <div class="glass-panel game-over-panel">
-            <h2>GAME OVER</h2>
-            <div class="final-score-box">
-                <span class="label">SCORE</span>
-                <span id="final-score-value">1250</span>
-            </div>
-
-            <div class="save-form">
-                <input type="text" id="username-input" placeholder="Your Name" maxlength="12">
-                <button id="btn-save-score" class="btn-primary small">
-                    <i class="fa-solid fa-floppy-disk"></i> SAVE
-                </button>
-            </div>
-            <div id="save-message"></div>
-
-            <div class="action-buttons">
-                <button id="btn-share-score" class="btn-secondary">
-                    <i class="fa-solid fa-share-nodes"></i> Share
-                </button>
-                <button id="btn-restart-game" class="btn-primary">
-                    <i class="fa-solid fa-rotate-right"></i> Play Again
-                </button>
-                <button id="btn-home" class="btn-text">
-                    <i class="fa-solid fa-house"></i> Home
-                </button>
-            </div>
-        </div>
-    </div>
+    <div id="vignette"></div>
 
     <script type="module" src="app.js"></script>
 </body>
