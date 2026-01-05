@@ -1,31 +1,27 @@
-// v0.9.4 PHOENIX PROTOCOL - app.js
+// v0.9.5 JUICY UPDATE - app.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-console.log("🔥 Phoenix Protocol Initiated...");
+console.log("💎 JUICY MODE v0.9.5 INITIALIZED");
 
-// === 1. DEFENSIVE DOM SELECTION ===
+// === 1. DOM & CONFIG ===
 const getEl = (id) => {
     const el = document.getElementById(id);
-    if (!el) console.error(`CRITICAL: #${id} missing from HTML!`);
+    if (!el) console.error(`MISSING: #${id}`);
     return el;
 };
 
 const D = {
     video: getEl('videoElement'),
     canvas: getEl('canvasElement'),
-    // Screens
     menu: getEl('menu-screen'),
     gameOver: getEl('game-over-screen'),
     leaderboard: getEl('leaderboard-screen'),
-    // HUD
     scoreHud: getEl('score-hud'),
     scoreVal: getEl('score-val'),
     livesDisplay: getEl('lives-display'),
-    // Overlay
     overlay: getEl('countdown-overlay'),
     countText: getEl('countdown-text'),
-    // Inputs
     username: getEl('username-input'),
     saveMsg: getEl('save-msg'),
     saveBtn: getEl('btn-save'),
@@ -33,7 +29,6 @@ const D = {
     list: getEl('leaderboard-list')
 };
 
-// === 2. CONFIG & STATE ===
 const CONFIG = {
     apiKey: "AIzaSyBJqIfScXLNKWiaVylgKHlvuVbeT1rEOk8",
     authDomain: "chatgames-4b61b.firebaseapp.com",
@@ -48,24 +43,28 @@ try {
     const app = initializeApp(CONFIG);
     db = getFirestore(app);
 } catch (e) {
-    console.warn("Firebase Offline:", e);
+    console.warn("Firebase Offline Mode");
 }
 
+// === 2. STATE & PHYSICS ===
 const State = {
     active: false,
     score: 0,
     lives: 3,
     objects: [],
+    particles: [], // For explosions
     lastSpawn: 0,
     muted: false,
-    speed: 5
+    baseSpeed: 5,
+    speedMultiplier: 1.0,
+    lastNose: { x: 0, y: 0, distinct: false } // Face loss protection
 };
 
-// === 3. SOUND SYSTEM (Synthesized) ===
+// === 3. SOUND & FX ===
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = new AudioCtx();
 
-const beep = (freq = 600, type = 'sine') => {
+const beep = (freq, type) => {
     if (State.muted) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
@@ -75,12 +74,26 @@ const beep = (freq = 600, type = 'sine') => {
     osc.type = type;
     osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
     gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
 
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start();
-    osc.stop(audioCtx.currentTime + 0.2);
+    osc.stop(audioCtx.currentTime + 0.15);
+};
+
+// FX: Visual Feedback
+const pulseHUD = () => {
+    if (D.scoreVal) {
+        D.scoreVal.classList.remove('pulse-animation');
+        void D.scoreVal.offsetWidth; // Trigger reflow
+        D.scoreVal.classList.add('pulse-animation');
+    }
+};
+
+const flashDamage = () => {
+    document.body.classList.add('damage-flash');
+    setTimeout(() => document.body.classList.remove('damage-flash'), 300);
 };
 
 // === 4. CAMERA & MEDIAPIPE ===
@@ -94,7 +107,6 @@ async function initCamera() {
         });
         D.video.srcObject = stream;
 
-        // MediaPipe
         faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
         faceMesh.setOptions({ maxNumFaces: 1, minDetectionConfidence: 0.5 });
         faceMesh.onResults(onResults);
@@ -107,10 +119,9 @@ async function initCamera() {
 
         window.addEventListener('resize', resize);
         resize();
-
     } catch (e) {
-        console.error("Cam Check Failed:", e);
-        alert("Camera Access Denied. Please enable it.");
+        console.error(e);
+        alert("Camera required for gameplay.");
     }
 }
 
@@ -119,108 +130,180 @@ function resize() {
     D.canvas.height = window.innerHeight;
 }
 
-// === 5. GAME ENGINE ===
+// === 5. GAME ENGINE (JUICY EDITION) ===
 function onResults(results) {
     const ctx = D.canvas.getContext('2d');
     ctx.clearRect(0, 0, D.canvas.width, D.canvas.height);
 
-    let nx, ny; // Nose Coords
+    // 1. Face Tracking & Protection
+    let nx, ny, faceWidth = 0;
 
-    // Draw Face/Nose
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         const lm = results.multiFaceLandmarks[0];
         nx = lm[4].x * D.canvas.width;
         ny = lm[4].y * D.canvas.height;
 
-        // Neon Nose Dot
+        // Calculate Face Width for Cone Logic (Left Cheek 234 - Right Cheek 454)
+        const leftX = lm[234].x * D.canvas.width;
+        const rightX = lm[454].x * D.canvas.width;
+        faceWidth = Math.abs(rightX - leftX) / D.canvas.width; // 0.0 to 1.0
+
+        State.lastNose = { x: nx, y: ny, distinct: true };
+    } else if (State.lastNose.distinct) {
+        // Ghost Mode (Loss Protection)
+        nx = State.lastNose.x;
+        ny = State.lastNose.y;
+        ctx.globalAlpha = 0.5; // Visual cue for tracking loss
+    }
+
+    // Draw Neon Nose with Glow
+    if (nx !== undefined) {
         ctx.beginPath();
-        ctx.arc(nx, ny, 8, 0, Math.PI * 2);
+        ctx.arc(nx, ny, 10, 0, Math.PI * 2);
         ctx.fillStyle = '#00f2ea';
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 20;
         ctx.shadowColor = '#00f2ea';
         ctx.fill();
+        ctx.shadowBlur = 0; // Reset
+        ctx.globalAlpha = 1.0;
     }
 
     if (State.active) {
-        gameLoop(ctx, nx, ny);
+        gameLoop(ctx, nx, ny, faceWidth);
     }
 }
 
-function gameLoop(ctx, nx, ny) {
-    // Spawn Logic
-    if (performance.now() - State.lastSpawn > 1000) {
+function createExplosion(x, y, color) {
+    for (let i = 0; i < 8; i++) {
+        State.particles.push({
+            x: x, y: y,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
+            life: 1.0,
+            color: color
+        });
+    }
+}
+
+function gameLoop(ctx, nx, ny, faceWidth) {
+    // A. Dynamic Spawner (Cone Logic)
+    // Closer Face (High faceWidth) -> Narrower Spawn
+    // Far Face (Low faceWidth) -> Wider Spawn
+    let widthFactor = 1.0;
+    if (faceWidth > 0) {
+        // Clamp and Invert: Large Face = 0.4 spawn width, Small Face = 0.95
+        widthFactor = Math.max(0.4, Math.min(0.95, 1.0 - (faceWidth * 1.5)));
+    }
+
+    if (performance.now() - State.lastSpawn > 1000 / State.speedMultiplier) {
+        const safeZone = (1 - widthFactor) / 2;
+        const randomX = (safeZone + Math.random() * widthFactor) * D.canvas.width;
+
         State.objects.push({
-            x: Math.random() * (D.canvas.width - 40) + 20,
-            y: -50,
-            type: Math.random() > 0.3 ? 'good' : 'bad' // 70% Good
+            x: randomX,
+            y: -60,
+            type: Math.random() > 0.35 ? 'good' : 'bad', // 65% Gems
+            speed: (Math.random() * 2 + State.baseSpeed) * State.speedMultiplier
         });
         State.lastSpawn = performance.now();
     }
 
-    // Object Logic
-    State.objects.forEach((o, i) => {
-        o.y += State.speed;
+    // B. Object Physics & Logic
+    for (let i = State.objects.length - 1; i >= 0; i--) {
+        let o = State.objects[i];
+        o.y += o.speed;
 
-        // Draw
-        ctx.beginPath();
-        ctx.textAlign = "center";
-
-        // Glow Effect
-        ctx.shadowBlur = 10;
+        // Draw Juicy Object
+        ctx.shadowBlur = 25;
         ctx.shadowColor = o.type === 'good' ? '#00f2ea' : '#ff0050';
-
-        ctx.font = "30px Arial";
+        ctx.fillStyle = "white";
+        ctx.font = "32px Arial";
         ctx.fillText(o.type === 'good' ? '💎' : '💣', o.x, o.y);
-        ctx.shadowBlur = 0; // Reset
+        ctx.shadowBlur = 0;
 
-        // Collision
-        if (nx && Math.hypot(nx - o.x, ny - o.y) < 30) {
+        // Collision Detection
+        if (nx && Math.hypot(nx - o.x, ny - o.y) < 40) {
             State.objects.splice(i, 1);
             if (o.type === 'good') {
+                // Good Catch
                 State.score += 10;
-                beep(800, 'sine');
+                // Progression
+                if (State.score % 50 === 0) State.speedMultiplier += 0.1;
+
+                beep(800 + (State.score), 'sine'); // Pitch rises
+                pulseHUD();
+                createExplosion(o.x, o.y, '#00f2ea');
             } else {
+                // Bad Catch
                 State.lives--;
                 beep(150, 'sawtooth');
+                flashDamage();
+                createExplosion(o.x, o.y, '#ff0050');
                 if (State.lives <= 0) endGame();
             }
             updateHud();
+            continue;
         }
 
-        // Cleanup
-        if (o.y > D.canvas.height) State.objects.splice(i, 1);
-    });
+        // Missed Object Handling (Immortality Fix)
+        if (o.y > D.canvas.height + 50) {
+            if (o.type === 'good') {
+                State.lives--; // Missed a gem!
+                flashDamage();
+                beep(100, 'square');
+                if (State.lives <= 0) endGame();
+            }
+            State.objects.splice(i, 1);
+            updateHud();
+        }
+    }
+
+    // C. Particle Physics
+    for (let i = State.particles.length - 1; i >= 0; i--) {
+        let p = State.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.05;
+
+        if (p.life <= 0) {
+            State.particles.splice(i, 1);
+        } else {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+        }
+    }
 }
 
 function updateHud() {
     D.scoreVal.innerText = State.score;
-    let hearts = "";
-    for (let i = 0; i < State.lives; i++) hearts += "❤️";
-    D.livesDisplay.innerText = hearts;
+    D.livesDisplay.innerText = "❤️".repeat(Math.max(0, State.lives));
 }
 
-// === 6. FLOW CONTROL (CRITICAL) ===
+// === 6. FLOW CONTROL ===
 
 window.startGame = function () {
-    // 1. Hide Menu
-    if (D.menu) D.menu.classList.add('hidden');
-    if (D.gameOver) D.gameOver.classList.add('hidden');
-    if (D.scoreHud) D.scoreHud.classList.remove('hidden');
+    D.menu.classList.add('hidden');
+    D.gameOver.classList.add('hidden');
+    D.scoreHud.classList.remove('hidden');
 
-    // 2. Reset Logic
     State.score = 0;
     State.lives = 3;
     State.objects = [];
+    State.particles = [];
     State.active = false;
-    updateHud();
+    State.speedMultiplier = 1.0;
+    State.lastNose = { x: 0, y: 0, distinct: false };
 
-    // 3. Start Sequence
+    updateHud();
     showCountdown();
 
-    // 4. WATCHDOG (Safety Net)
+    // Watchdog
     setTimeout(() => {
         if (!State.active && D.menu.classList.contains('hidden')) {
-            console.warn("Watchdog: Forcing Game Start!");
             D.overlay.classList.add('hidden');
             State.active = true;
             State.lastSpawn = performance.now();
@@ -230,19 +313,17 @@ window.startGame = function () {
 
 function showCountdown() {
     D.overlay.classList.remove('hidden');
-    D.countText.innerText = "3";
     let n = 3;
+    D.countText.innerText = n;
 
     const iv = setInterval(() => {
         n--;
-        if (n > 0) {
-            D.countText.innerText = n;
-        } else if (n === 0) {
-            D.countText.innerText = "GO!";
-        } else {
+        if (n > 0) D.countText.innerText = n;
+        else if (n === 0) D.countText.innerText = "GO!";
+        else {
             clearInterval(iv);
-            D.overlay.classList.add('hidden'); // CRITICAL: Hide Overlay
-            State.active = true; // START ENGINE
+            D.overlay.classList.add('hidden');
+            State.active = true;
             State.lastSpawn = performance.now();
         }
     }, 1000);
@@ -254,34 +335,20 @@ function endGame() {
     D.gameOver.classList.remove('hidden');
     document.getElementById('final-score').innerText = State.score;
 
-    // Reset Save UI
     D.saveBtn.disabled = false;
     D.saveMsg.innerText = "";
     D.username.value = "";
-
-    beep(100, 'square');
-    setTimeout(() => beep(80, 'square'), 200);
 }
 
-// === 7. BINDINGS & ACTIONS ===
+// === 7. ACTIONS ===
+window.restartGame = () => window.startGame();
 
-window.restartGame = function () {
-    window.startGame();
-}
-
-window.goHome = function () {
+window.goHome = () => {
     D.gameOver.classList.add('hidden');
     D.menu.classList.remove('hidden');
-    D.scoreHud.classList.remove('hidden');
+    D.scoreHud.classList.remove('hidden'); // Optional
 }
 
-// Global Mute Toggle
-D.muteBtn.addEventListener('click', () => {
-    State.muted = !State.muted;
-    D.muteBtn.style.opacity = State.muted ? 0.5 : 1;
-});
-
-// Save Function with Error Handling
 D.saveBtn.addEventListener('click', async () => {
     const name = D.username.value.trim() || 'Anonymous';
     D.saveBtn.disabled = true;
@@ -294,48 +361,11 @@ D.saveBtn.addEventListener('click', async () => {
         D.saveMsg.innerText = "SAVED!";
         D.saveMsg.style.color = "#00f2ea";
     } catch (e) {
-        console.error("Save Error:", e);
-        D.saveMsg.innerText = "ERROR SAVING";
-        D.saveMsg.style.color = "#ff0050";
-        alert("Database connection failed. Please try again.");
+        D.saveMsg.innerText = "ERROR";
+        D.saveMsg.style.color = "red";
         D.saveBtn.disabled = false;
     }
 });
 
-D.list.addEventListener('click', () => {
-    // Placeholder logic for share
-});
-
-// Leaderboard Logic
-const openStats = document.getElementById('btn-leaderboard');
-const closeStats = document.querySelector('#leaderboard-screen button');
-
-if (openStats) openStats.onclick = async () => {
-    D.menu.classList.add('hidden');
-    D.leaderboard.classList.remove('hidden');
-    D.list.innerHTML = "Loading...";
-
-    try {
-        const q = query(collection(db, 'scores'), orderBy('score', 'desc'), limit(10));
-        const snap = await getDocs(q);
-        D.list.innerHTML = "";
-
-        snap.forEach(doc => {
-            const d = doc.data();
-            D.list.innerHTML += `<div style="display:flex; justify-content:space-between; margin:10px 0; border-bottom:1px solid rgba(255,255,255,0.1); padding:5px;">
-                <span>${d.name}</span> <span style="color:#00f2ea">${d.score}</span>
-            </div>`;
-        });
-    } catch (e) {
-        D.list.innerHTML = "Leaderboard Offline.";
-    }
-};
-
-window.closeLeaderboard = function () {
-    D.leaderboard.classList.add('hidden');
-    D.menu.classList.remove('hidden');
-}
-
-// === STARTUP ===
+// Start
 initCamera();
-console.log("PHOENIX PROTOCOL ACTIVE v0.9.4");

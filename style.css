@@ -1,10 +1,11 @@
-/* v0.9.4 PHOENIX PROTOCOL - style.css */
+/* v0.9.5 JUICY UPDATE - style.css */
 
 :root {
     --cyan: #00f2ea;
     --navy-glass: rgba(15, 23, 42, 0.65);
     --border: rgba(255, 255, 255, 0.12);
     --font: 'Outfit', sans-serif;
+    --danger: #ff0050;
 }
 
 * {
@@ -20,18 +21,16 @@ html {
     width: 100vw;
     height: 100vh;
     background: transparent !important;
-    /* Critical Fix */
     overflow: hidden;
     color: white;
     font-family: var(--font);
 }
 
-/* Fallback background if video fails */
 body {
     background: linear-gradient(135deg, #0f172a 0%, #000 100%);
 }
 
-/* 2. REALITY LAYER (Z: -2 to 1) */
+/* 2. REALITY LAYER */
 #videoElement,
 #canvasElement {
     position: fixed;
@@ -47,7 +46,6 @@ body {
     z-index: -2;
 }
 
-/* Bottom */
 #canvasElement {
     z-index: -1;
 }
@@ -58,9 +56,16 @@ body {
     background: radial-gradient(circle, transparent 40%, rgba(0, 0, 0, 0.8) 100%);
     z-index: 1;
     pointer-events: none;
+    transition: background 0.2s;
+    /* Juiciness */
 }
 
-/* 3. UI LOGIC (Z: 100) */
+/* DAMAGE EFFECT */
+.damage-flash #vignette-overlay {
+    background: radial-gradient(circle, transparent 40%, rgba(255, 0, 80, 0.6) 100%);
+}
+
+/* 3. UI LOGIC */
 #ui-layer {
     position: fixed;
     inset: 0;
@@ -69,13 +74,11 @@ body {
     justify-content: center;
     align-items: center;
     pointer-events: none;
-    /* Let clicks pass through empty space */
 }
 
-/* 4. DEEP GLASS DESIGN (Z: 101) */
+/* 4. DEEP GLASS DESIGN */
 .glass-panel {
     pointer-events: auto;
-    /* Re-enable clicks */
     background: var(--navy-glass);
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -86,8 +89,6 @@ body {
     max-width: 400px;
     text-align: center;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-
-    /* Animation */
     animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -134,6 +135,27 @@ body {
     color: var(--cyan);
     margin-bottom: 15px;
     filter: drop-shadow(0 0 15px rgba(0, 242, 234, 0.4));
+}
+
+/* JUICY ELEMENTS */
+@keyframes pulse-score {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.5);
+        color: #fff;
+        text-shadow: 0 0 20px var(--cyan);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.pulse-animation {
+    animation: pulse-score 0.2s ease-out;
 }
 
 /* Buttons */
@@ -224,11 +246,13 @@ button:active {
     gap: 15px;
     z-index: 90;
     font-weight: 800;
+    transition: transform 0.1s;
 }
 
 #score-val {
     color: var(--cyan);
     font-size: 1.4rem;
+    transition: color 0.1s;
 }
 
 .hud-label {
@@ -246,7 +270,6 @@ button:active {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.85);
-    /* Semi-transparent black */
     display: flex;
     justify-content: center;
     align-items: center;
