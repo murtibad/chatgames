@@ -17,7 +17,7 @@ const restartButton = document.getElementById('restartButton');
 const menuButton = document.getElementById('menuButton');
 const menuButtonGameOver = document.getElementById('menuButtonGameOver');
 
-const canvasCtx = canvasElement.getContext('2d');
+const canvasCtx = canvasElement.getContext('2d', { willReadFrequently: true });
 
 let stream = null;
 let isStreamActive = false;
@@ -216,8 +216,6 @@ function initializeFaceMesh() {
     });
 
     faceMesh.onResults(onFaceMeshResults);
-
-    console.log('🎭 MediaPipe FaceMesh initialized');
 }
 
 /**
@@ -227,6 +225,11 @@ function onFaceMeshResults(results) {
     // Set canvas dimensions
     canvasElement.width = videoElement.videoWidth;
     canvasElement.height = videoElement.videoHeight;
+
+    // Prevent processing if canvas is not ready
+    if (!canvasElement.height || canvasElement.height === 0) {
+        return;
+    }
 
     // Clear canvas
     canvasCtx.save();
@@ -314,7 +317,7 @@ function gameLoop(timestamp) {
             if (obj.type === 'good') {
                 gameState.lives--;
                 updateLivesDisplay();
-                console.log(`💔 Lost a life! Lives remaining: ${gameState.lives}`);
+
 
                 // Check for game over
                 if (gameState.lives <= 0) {
@@ -346,7 +349,6 @@ function gameLoop(timestamp) {
                 // Check for difficulty increase (every 10 points)
                 if (gameState.score % 10 === 0 && gameState.score > 0) {
                     gameState.speedMultiplier *= 1.1;
-                    console.log(`⚡ Difficulty increased! Speed multiplier: ${gameState.speedMultiplier.toFixed(2)}x`);
 
                     // Show level up text
                     const levelUpText = new FloatingText(
@@ -368,7 +370,7 @@ function gameLoop(timestamp) {
                 const floatingText = new FloatingText(obj.x, obj.y, '-2 HP', '#ef4444');
                 gameState.floatingTexts.push(floatingText);
 
-                console.log(`💣 Hit a bomb! Lives: ${gameState.lives}`);
+
 
                 // Check for game over
                 if (gameState.lives <= 0) {
@@ -433,7 +435,14 @@ function updateLivesDisplay() {
  * Starts the game
  */
 function startGame() {
-    console.log('🎮 Starting game...');
+    // Wait for video to be ready before starting game
+    if (videoElement.readyState < 2) {
+        // Video not ready yet, wait and retry
+        setTimeout(startGame, 100);
+        return;
+    }
+
+
 
     // Reset game state
     gameState.score = 0;
@@ -452,14 +461,14 @@ function startGame() {
     // Start game loop
     gameState.animationFrameId = requestAnimationFrame(gameLoop);
 
-    console.log('✅ Game started!');
+
 }
 
 /**
  * Stops the game
  */
 function stopGame() {
-    console.log('⏹️ Stopping game...');
+
 
     gameState.isGameActive = false;
     gameState.fallingObjects = [];
@@ -474,15 +483,13 @@ function stopGame() {
     // Hide score display
     scoreDisplay.style.display = 'none';
 
-    console.log(`Final score: ${gameState.score}`);
+
 }
 
 /**
  * Triggers game over state
  */
 function gameOver() {
-    console.log('💀 Game Over!');
-
     // Stop the game loop
     gameState.isGameActive = false;
     if (gameState.animationFrameId) {
@@ -494,14 +501,14 @@ function gameOver() {
     finalScoreValue.textContent = gameState.score;
     gameOverOverlay.classList.add('active');
 
-    console.log(`Final Score: ${gameState.score}`);
+
 }
 
 /**
  * Restarts the game
  */
 function restartGame() {
-    console.log('🔄 Restarting game...');
+
 
     // Hide game over modal
     gameOverOverlay.classList.remove('active');
@@ -571,9 +578,6 @@ async function startCamera() {
         // Update button state
         updateButtonState();
 
-        console.log('✅ Camera started successfully');
-        console.log('👃 Nose tracking active');
-
         // Start the game
         startGame();
 
@@ -614,8 +618,6 @@ function stopCamera() {
 
     // Update button state
     updateButtonState();
-
-    console.log('⏹️ Camera stopped');
 }
 
 /**
@@ -735,8 +737,6 @@ menuButtonGameOver.addEventListener('click', () => {
  * Initializes and starts the game
  */
 function initGame(gameName) {
-    console.log(`🎮 Initializing game: ${gameName}`);
-
     // Hide menu, show game screen
     menuScreen.style.display = 'none';
     gameScreen.style.display = 'flex';
@@ -749,8 +749,6 @@ function initGame(gameName) {
  * Returns to main menu
  */
 function returnToMenu() {
-    console.log('🏠 Returning to main menu...');
-
     // Stop camera and game
     stopCamera();
 
@@ -761,10 +759,10 @@ function returnToMenu() {
     gameScreen.style.display = 'none';
     menuScreen.style.display = 'flex';
 
-    console.log('✅ Returned to menu');
+
 }
 
 // Set initial state
 scoreDisplay.style.display = 'none'; // Hide score initially
-console.log('🎮 ChatGames Platform loaded - v0.3.2');
+console.log('🎮 ChatGames Platform loaded - v0.3.3');
 
