@@ -624,13 +624,7 @@ footer {
 }
 
 /* ===== Countdown Overlay Styles ===== */
-#countdownOverlay {
-    backdrop-filter: blur(10px) !important;
-    background: rgba(0, 0, 0, 0.7) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
+#countdownOverlay {`n    backdrop-filter: blur(10px);`n    background: rgba(0, 0, 0, 0.7);`n}
 
 #countdownText {
     font-size: 8rem !important;
