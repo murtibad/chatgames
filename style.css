@@ -425,3 +425,152 @@ footer {
         grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     }
 }
+/* ===== Leaderboard Styles ===== */
+.btn-leaderboard {
+    width: 100%;
+    padding: 16px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: var(--font-family);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn-leaderboard:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--accent-cyan);
+}
+
+.leaderboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.leaderboard-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-card);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border-subtle);
+    padding: 16px;
+    border-radius: 12px;
+    transition: transform 0.2s ease;
+}
+
+.leaderboard-item:hover {
+    transform: translateX(4px);
+    border-color: var(--accent-cyan);
+}
+
+.rank {
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: var(--accent-cyan);
+    width: 40px;
+}
+
+.player-info {
+    flex: 1;
+    text-align: left;
+}
+
+.player-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    display: block;
+}
+
+.player-date {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.player-score {
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: var(--accent-pink);
+}
+
+.loading-spinner {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px;
+    font-size: 1.1rem;
+}
+
+/* ===== Save Score Form ===== */
+.save-score-form {
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.username-input {
+    width: 100%;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: 1rem;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.username-input:focus {
+    outline: none;
+    border-color: var(--accent-cyan);
+}
+
+.btn-save {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent-cyan);
+    color: var(--bg-app);
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--font-family);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.btn-save:hover {
+    background: var(--accent-cyan-hover);
+}
+
+.btn-save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.save-message {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    min-height: 20px;
+}
+
+.save-message.success {
+    color: var(--accent-cyan);
+}
+
+.save-message.error {
+    color: var(--accent-pink);
+}
