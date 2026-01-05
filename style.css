@@ -7,9 +7,9 @@
 
 :root {
     /* Social Media App Color Palette (TikTok/Snapchat Inspired) */
-    --bg-app: #000000;
+    --bg-app: linear-gradient(135deg, #0f172a 0%, #000000 100%);
     --bg-dark: #121212;
-    --bg-card: #1a1a1a;
+    --bg-card: rgba(255, 255, 255, 0.05);
     --bg-overlay: rgba(0, 0, 0, 0.85);
 
     --accent-cyan: #25F4EE;
@@ -100,6 +100,7 @@ body {
 /* ===== Game Card (TikTok Effect Style) ===== */
 .game-card {
     background: var(--bg-card);
+    backdrop-filter: blur(10px);
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 24px 16px;
@@ -109,7 +110,7 @@ body {
 }
 
 .game-card:hover {
-    background: #252525;
+    background: rgba(255, 255, 255, 0.08);
     border-color: var(--accent-cyan);
     transform: scale(1.02);
 }
@@ -291,8 +292,7 @@ main {
 .video-container {
     position: relative;
     width: 100%;
-    max-width: 500px;
-    aspect-ratio: 9 / 16;
+    max-width: 640px;
     background: var(--bg-dark);
     border-radius: 16px;
     overflow: hidden;
@@ -302,8 +302,7 @@ main {
 
 #videoElement {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    height: auto;
     display: block;
     transform: scaleX(-1);
 }
@@ -414,10 +413,6 @@ footer {
 @media (max-width: 768px) {
     .title {
         font-size: 2.5rem;
-    }
-
-    .video-container {
-        aspect-ratio: 3 / 4;
     }
 }
 

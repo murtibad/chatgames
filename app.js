@@ -766,5 +766,5 @@ function returnToMenu() {
 
 // Set initial state
 scoreDisplay.style.display = 'none'; // Hide score initially
-console.log('🎮 ChatGames Platform loaded - v0.3.1');
+console.log('🎮 ChatGames Platform loaded - v0.3.2');
 
