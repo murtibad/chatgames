@@ -700,3 +700,87 @@ footer {
 .toast-info {
     background: #3b82f6;
 }
+
+/* ===== LIQUID MOTION DESIGN ===== */
+
+/* Animated Mesh Gradient Background */
+body {
+    background: linear-gradient(-45deg, #0f172a, #1e1b4b, #1e3a8a, #134e4a, #0f172a);
+    background-size: 400% 400%;
+    animation: gradient-animation 20s ease infinite;
+}
+
+@keyframes gradient-animation {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Glassmorphism for All Panels */
+.game-card,
+.glass-panel,
+#leaderboard-screen .container,
+#menu-screen .container,
+#game-screen .container,
+.game-over-modal,
+.leaderboard-item {
+    background: rgba(255, 255, 255, 0.03) !important;
+    backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Elastic Buttons */
+button,
+.btn-start,
+.btn-restart,
+.btn-menu,
+.btn-save,
+.btn-share,
+.btn-leaderboard,
+.btn-play {
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+
+button:hover,
+.btn-start:hover,
+.btn-restart:hover,
+.btn-menu:hover,
+.btn-save:hover,
+.btn-share:hover,
+.btn-leaderboard:hover,
+.btn-play:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4) !important;
+}
+
+button:active,
+.btn-start:active,
+.btn-restart:active,
+.btn-menu:active,
+.btn-save:active,
+.btn-share:active,
+.btn-leaderboard:active,
+.btn-play:active {
+    transform: scale(0.95) !important;
+}
+
+/* Enhanced Typography */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif !important;
+}
+
+h1, h2, h3 {
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+}
+
+.title {
+    font-weight: 900 !important;
+    font-size: 3rem !important;
+    background: linear-gradient(135deg, #25F4EE 0%, #fff 50%, #FE2C55 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}

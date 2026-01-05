@@ -277,6 +277,9 @@ function onFaceMeshResults(results) {
     }
 
     canvasCtx.restore();
+    } catch (error) {
+        console.error('FaceMesh error:', error);
+    }
 }
 
 function drawNoseDot(x, y) {
