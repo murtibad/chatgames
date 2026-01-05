@@ -453,7 +453,7 @@ function startGame() {
 
         text.textContent = `3`;
         text.style.color = `white`;
-        overlay.style.display = `flex`;
+        overlay.classList.add('active');
         let count = 3;
 
         const interval = setInterval(() => {
@@ -469,7 +469,7 @@ function startGame() {
                 text.style.animation = `pulse-scale 0.5s ease-in-out`;
             } else {
                 clearInterval(interval);
-                overlay.style.display = `none`;
+                overlay.classList.remove('active');
 
                 gameState.isGameActive = true;
                 gameState.lastSpawnTime = performance.now();
@@ -558,8 +558,8 @@ function restartGame() {
 
 async function startCamera() {
     try {
-        startButton.disabled = true;
-        startButton.textContent = 'Starting Camera...';
+        if (startButton) startButton.disabled = true;
+        if (startButton) startButton.textContent = 'Starting Camera...';
 
         stream = await navigator.mediaDevices.getUserMedia({
             video: {
@@ -572,7 +572,7 @@ async function startCamera() {
 
         videoElement.srcObject = stream;
         await videoElement.play();
-        videoOverlay.classList.add('hidden');
+        if (videoOverlay) videoOverlay.classList.add('hidden');
         isStreamActive = true;
 
         if (!faceMesh) {
@@ -748,7 +748,7 @@ async function loadLeaderboard() {
 // Expose functions to window (since we are a module now)
 window.initGame = function (gameName) {
     menuScreen.style.display = 'none';
-    leaderboardScreen.style.display = 'none';
+    if (leaderboardScreen) leaderboardScreen.style.display = 'none';
     gameScreen.style.display = 'flex';
     startCamera();
 };
@@ -762,9 +762,9 @@ window.openLeaderboard = function () {
 function returnToMenu() {
     stopCamera();
     gameOverOverlay.classList.remove('active');
-    gameScreen.style.display = 'none';
-    leaderboardScreen.style.display = 'none';
-    menuScreen.style.display = 'flex';
+    if (gameScreen) gameScreen.style.display = 'none';
+    if (leaderboardScreen) leaderboardScreen.style.display = 'none';
+    if (menuScreen) menuScreen.style.display = 'flex';
 }
 
 // Event Listeners
