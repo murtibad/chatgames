@@ -139,7 +139,8 @@ function loadPlayerData() {
         inventory: ['default'],
         equippedSkin: 'default',
         lastUsername: '',
-        volume: 1.0
+        volume: 1.0,
+        hasSeenTutorial: false // Track tutorial
     };
 }
 
@@ -239,6 +240,8 @@ const D = {
     progressRing: getEl('progress-ring'),
     proximityWarning: getEl('proximity-warning'),
     dangerZone: getEl('danger-zone'),
+    tutorialOverlay: getEl('tutorial-overlay'),
+    penaltyNotification: getEl('penalty-notification'),
     username: getEl('username-input'),
     saveMsg: getEl('save-msg'),
     saveBtn: getEl('btn-save'),
@@ -344,6 +347,12 @@ function showDangerZone(show) {
     if (!D.dangerZone) return;
     if (show) D.dangerZone.classList.remove('hidden');
     else D.dangerZone.classList.add('hidden');
+}
+
+function showPenaltyNotification(show) {
+    if (!D.penaltyNotification) return;
+    if (show) D.penaltyNotification.classList.remove('hidden');
+    else D.penaltyNotification.classList.add('hidden');
 }
 
 // === CLASSES ===
@@ -481,6 +490,23 @@ window.closeSettings = function () {
         if (D.menu) D.menu.style.pointerEvents = 'auto';
         if (D.gameOver) D.gameOver.style.pointerEvents = 'auto';
     }
+};
+
+// === TUTORIAL FLOW ===
+window.closeTutorial = function () {
+    if (D.tutorialOverlay) D.tutorialOverlay.classList.add('hidden');
+    PlayerData.hasSeenTutorial = true;
+    savePlayerData(PlayerData);
+
+    // NOW start distance check
+    if (D.distanceOverlay) D.distanceOverlay.classList.remove('hidden');
+    State.waitingForIdealDistance = true;
+    State.isDistanceIdeal = false;
+    State.distanceHoldTime = 0;
+    State.lastDistanceCheckTime = performance.now();
+
+    if (D.holdProgress) D.holdProgress.classList.add('hidden');
+    if (D.progressRing) updateHoldProgress(0);
 };
 
 // BACKDROP CLICK
@@ -622,14 +648,20 @@ window.startGame = function () {
     if (D.settings) D.settings.classList.add('hidden');
     if (D.settingsBtn) D.settingsBtn.classList.add('hidden');
 
-    if (D.distanceOverlay) D.distanceOverlay.classList.remove('hidden');
-    State.waitingForIdealDistance = true;
-    State.isDistanceIdeal = false;
-    State.distanceHoldTime = 0;
-    State.lastDistanceCheckTime = performance.now();
+    // NEW FLOW: Show tutorial if first time, else go to distance check
+    if (!PlayerData.hasSeenTutorial) {
+        if (D.tutorialOverlay) D.tutorialOverlay.classList.remove('hidden');
+        // Tutorial will handle showing distance check after "Ready" click
+    } else {
+        if (D.distanceOverlay) D.distanceOverlay.classList.remove('hidden');
+        State.waitingForIdealDistance = true;
+        State.isDistanceIdeal = false;
+        State.distanceHoldTime = 0;
+        State.lastDistanceCheckTime = performance.now();
 
-    if (D.holdProgress) D.holdProgress.classList.add('hidden');
-    if (D.progressRing) updateHoldProgress(0);
+        if (D.holdProgress) D.holdProgress.classList.add('hidden');
+        if (D.progressRing) updateHoldProgress(0);
+    }
 
     State.score = 0;
     State.lives = 3;
@@ -932,12 +964,14 @@ function onResults(results) {
                 if (State.warningTime >= DISTANCE.PENALTY_THRESHOLD && !State.isPenaltyMode) {
                     State.isPenaltyMode = true;
                     showDangerZone(true);
+                    showPenaltyNotification(true); // Show explanation
                 }
             } else {
                 State.warningTime = 0;
                 if (State.isPenaltyMode) {
                     State.isPenaltyMode = false;
                     showDangerZone(false);
+                    showPenaltyNotification(false); // Hide explanation
                 }
                 showProximityWarning(false);
             }
@@ -1055,8 +1089,10 @@ window.goHome = () => {
     if (D.settings) D.settings.classList.add('hidden');
     if (D.distanceOverlay) D.distanceOverlay.classList.add('hidden');
     if (D.holdProgress) D.holdProgress.classList.add('hidden');
+    if (D.tutorialOverlay) D.tutorialOverlay.classList.add('hidden');
     showProximityWarning(false);
     showDangerZone(false);
+    showPenaltyNotification(false);
     D.menu.classList.remove('hidden');
     document.body.classList.remove('fever-mode');
     if (D.settingsBtn) D.settingsBtn.classList.remove('hidden');

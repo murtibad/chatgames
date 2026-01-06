@@ -1,0 +1,397 @@
+// v1.1.4 TUTORIAL & FEEDBACK - app.js
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// === FIREBASE CONFIG ===
+const CONFIG = {
+    apiKey: "AIzaSyBJqIfScXLNKWiaVylgKHlvuVbeT1rEOk8",
+    authDomain: "chatgames-4b61b.firebaseapp.com",
+    projectId: "chatgames-4b61b",
+    storageBucket: "chatgames-4b61b.firebasestorage.app",
+    messagingSenderId: "832676453422",
+    appId: "1:832676453422:web:92fb35a2c7dbf73cad13bf"
+};
+
+let db;
+try {
+    const app = initializeApp(CONFIG);
+    db = getFirestore(app);
+} catch (e) {
+    console.error("Firebase initialization failed:", e);
+}
+
+// === AUDIO SYSTEM ===
+const AudioManager = {
+    ctx: null,
+    masterGain: null,
+    muted: false,
+    volume: 1.0,
+    
+    init() {
+        try {
+            if (!this.ctx) {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioCtx();
+            }
+            if (this.ctx.state === 'suspended') this.ctx.resume();
+            if (!this.masterGain) {
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.connect(this.ctx.destination);
+                this.masterGain.gain.value = this.volume;
+            }
+        } catch(e) {
+            console.error("AudioManager init failed:", e);
+        }
+    },
+    
+    setVolume(value) {
+        this.volume = clamp(parseFloat(value) || 0.5, 0, 1);
+        if (this.masterGain) this.masterGain.gain.value = this.volume;
+    },
+    
+    playGem() {
+        if (!this.ctx || this.muted) return;
+        try {
+            this.init();
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, this.ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1600, this.ctx.currentTime + 0.05);
+            gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+            osc.connect(gain); gain.connect(this.masterGain);
+            osc.start(); osc.stop(this.ctx.currentTime + 0.2);
+        } catch(e) {}
+    },
+    
+    playBomb() {
+        if (!this.ctx || this.muted) return;
+        try {
+            this.init();
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.2);
+            gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+            osc.connect(gain); gain.connect(this.masterGain);
+            osc.start(); osc.stop(this.ctx.currentTime + 0.35);
+        } catch(e) {}
+    },
+    
+    playGold() {
+        if (!this.ctx || this.muted) return;
+        try {
+            this.init();
+            const notes = [523.25, 659.25, 783.99];
+            notes.forEach((freq, i) => {
+                setTimeout(() => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                    osc.connect(gain); gain.connect(this.masterGain);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.35);
+                }, i * 50);
+            });
+        } catch(e) {}
+    }
+};
+
+// === CONSTANTS ===
+const DISTANCE = {
+    TOO_FAR: 0.15,
+    TOO_CLOSE: 0.45,
+    TOO_HIGH: 0.3,
+    TOO_LOW: 0.7,
+    HOLD_DURATION: 1500,
+    PENALTY_THRESHOLD: 2000
+};
+
+const MAX_PLAY_WIDTH = 600;
+
+function getPlayArea() {
+    const playWidth = Math.min(window.innerWidth, MAX_PLAY_WIDTH);
+    const playXStart = (window.innerWidth - playWidth) / 2;
+    return { playWidth, playXStart };
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+// === LOCALSTORAGE ===
+const STORAGE_KEY = 'chatgames_data';
+
+function loadPlayerData() {
+    try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        if(data) return JSON.parse(data);
+    } catch(e) {
+        console.error("localStorage load error:", e);
+    }
+    return {
+        totalCoins: 0,
+        inventory: ['default'],
+        equippedSkin: 'default',
+        lastUsername: '',
+        volume: 1.0,
+        hasSeenTutorial: false // NEW: Track tutorial
+    };
+}
+
+function savePlayerData(data) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch(e) {
+        console.error("localStorage save error:", e);
+    }
+}
+
+const PlayerData = loadPlayerData();
+
+// === SHOP ITEMS ===
+const SHOP_ITEMS = [
+    { id: 'default', name: 'Neon Dot', price: 0, color: '#00f2ea', type: 'circle', hitboxMultiplier: 1.0, ability: null, description: 'Classic cyan glow' },
+    { id: 'clown', name: 'Clown Nose', price: 500, color: '#ff0050', type: 'circle', hitboxMultiplier: 1.3, ability: 'shield', description: '10% bomb shield' },
+    { id: 'cyborg', name: 'Cyborg', price: 1000, color: '#00ff00', type: 'square', hitboxMultiplier: 1.6, ability: null, description: 'Tech precision' },
+    { id: 'gold', name: 'Golden Touch', price: 2000, color: '#FFD700', type: 'circle', hitboxMultiplier: 2.0, ability: 'multiplier', description: '1.2x score boost' }
+];
+
+//... (sprites remain same - skipping for brevity, continuing with DOM)
+
+const diamondSprite = document.createElement('canvas');
+const goldDiamondSprite = document.createElement('canvas');
+const bombSprite = document.createElement('canvas');
+const spriteSize = 128;
+
+function preRenderDiamond() {
+    diamondSprite.width = spriteSize; diamondSprite.height = spriteSize;
+    const ctx = diamondSprite.getContext('2d');
+    const cx = spriteSize / 2, cy = spriteSize / 2, size = spriteSize / 5;
+    ctx.shadowBlur = 20; ctx.shadowColor = "rgba(0, 255, 255, 0.8)";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size); ctx.lineTo(cx + size, cy); ctx.lineTo(cx, cy + size); ctx.lineTo(cx - size, cy); ctx.closePath();
+    const gradient = ctx.createRadialGradient(cx, cy - 5, 0, cx, cy, size);
+    gradient.addColorStop(0, "#E0FFFF"); gradient.addColorStop(0.5, "#00FFFF"); gradient.addColorStop(1, "#008B8B");
+    ctx.fillStyle = gradient; ctx.fill();
+    ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function preRenderGoldDiamond() {
+    goldDiamondSprite.width = spriteSize; goldDiamondSprite.height = spriteSize;
+    const ctx = goldDiamondSprite.getContext('2d');
+    const cx = spriteSize / 2, cy = spriteSize / 2, size = spriteSize / 5;
+    ctx.shadowBlur = 30; ctx.shadowColor = "rgba(255, 215, 0, 1.0)";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size); ctx.lineTo(cx + size, cy); ctx.lineTo(cx, cy + size); ctx.lineTo(cx - size, cy); ctx.closePath();
+    const gradient = ctx.createRadialGradient(cx, cy - 5, 0, cx, cy, size);
+    gradient.addColorStop(0, "#FFF4A3"); gradient.addColorStop(0.5, "#FFD700"); gradient.addColorStop(1, "#B8860B");
+    ctx.fillStyle = gradient; ctx.fill();
+    ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function preRenderBomb() {
+    bombSprite.width = spriteSize; bombSprite.height = spriteSize;
+    const ctx = bombSprite.getContext('2d');
+    const cx = spriteSize / 2, cy = spriteSize / 2, radius = spriteSize / 6;
+    ctx.shadowBlur = 20; ctx.shadowColor = "rgba(255, 0, 80, 0.8)";
+    const gradient = ctx.createRadialGradient(cx - 5, cy - 5, 0, cx, cy, radius);
+    gradient.addColorStop(0, "#FF6B9D"); gradient.addColorStop(1, "#C9184A");
+    ctx.fillStyle = gradient;
+    ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.strokeStyle = "#333"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx, cy - radius); ctx.lineTo(cx, cy - radius - 10); ctx.stroke();
+    ctx.fillStyle = "#FFD700";
+    ctx.beginPath(); ctx.arc(cx, cy - radius - 12, 3, 0, Math.PI * 2); ctx.fill();
+}
+
+preRenderDiamond();
+preRenderGoldDiamond();
+preRenderBomb();
+
+// === DOM ELEMENTS ===
+const getEl = (id) => {
+    const el = document.getElementById(id);
+    if (!el) console.warn(`Missing: #${id}`);
+    return el;
+};
+
+const D = {
+    video: getEl('videoElement'),
+    canvas: getEl('canvasElement'),
+    uiLayer: getEl('ui-layer'),
+    menu: getEl('menu-screen'),
+    gameOver: getEl('game-over-screen'),
+    leaderboard: getEl('leaderboard-screen'),
+    shop: getEl('shop-screen'),
+    settings: getEl('settings-modal'),
+    tutorialOverlay: getEl('tutorial-overlay'),
+    penaltyNotification: getEl('penalty-notification'),
+    scoreHud: getEl('score-hud'),
+    scoreVal: getEl('score-val'),
+    livesDisplay: getEl('lives-display'),
+    overlay: getEl('countdown-overlay'),
+    countText: getEl('countdown-text'),
+    distanceOverlay: getEl('distance-check-overlay'),
+    distanceMessage: getEl('distance-message'),
+    holdProgress: getEl('hold-progress'),
+    progressRing: getEl('progress-ring'),
+    proximityWarning: getEl('proximity-warning'),
+    dangerZone: getEl('danger-zone'),
+    username: getEl('username-input'),
+    saveMsg: getEl('save-msg'),
+    saveBtn: getEl('btn-save'),
+    shareBtn: getEl('btn-share'),
+    snapshotBtn: getEl('btn-snapshot'),
+    volumeSlider: getEl('volume-slider'),
+    volumePercentage: getEl('volume-percentage'),
+    muteToggle: getEl('mute-toggle'),
+    settingsBtn: getEl('settings-btn'),
+    list: getEl('leaderboard-list'),
+    coinCount: getEl('coin-count'),
+    shopItems: getEl('shop-items'),
+    shopBtn: getEl('btn-shop'),
+    leaderboardBtn: getEl('btn-leaderboard')
+};
+
+// === GAME STATE ===
+const State = {
+    isGameActive: false,
+    isCountingDown: false,
+    countdownTimer: null,
+    score: 0,
+    lives: 3,
+    combo: 0,
+    isFeverMode: false,
+    speedMultiplier: 1.0,
+    lastSpeedNotification: 0,
+    bombChance: 0.35,
+    lastSpawnTime: 0,
+    spawnInterval: 1200,
+    gameStartTime: 0,
+    fallingObjects: [],
+    particles: [],
+    floatingTexts: [],
+    noseX: 0.5,
+    noseY: 0.5,
+    faceScale: 0.1,
+    lastKnownNose: { x: 0, y: 0 },
+    noseStyle: PlayerData.equippedSkin,
+    nosePulse: 0,
+    waitingForIdealDistance: false,
+    isDistanceIdeal: false,
+    distanceHoldTime: 0,
+    lastDistanceCheckTime: 0,
+    scoreSaved: false,
+    warningTime: 0,
+    isPenaltyMode: false,
+    lastPenaltyCheck: 0,
+    faceDetected: false // NEW: Track face detection
+};
+
+AudioManager.muted = false;
+AudioManager.volume = PlayerData.volume;
+
+// (Continue with classes and functions - they remain the same, skipping to key changes)
+
+// === TUTORIAL FLOW ===
+window.closeTutorial = function() {
+    if(D.tutorialOverlay) D.tutorialOverlay.classList.add('hidden');
+    PlayerData.hasSeenTutorial = true;
+    savePlayerData(PlayerData);
+    // NOW start distance check
+    if(D.distanceOverlay) D.distanceOverlay.classList.remove('hidden');
+    State.waitingForIdealDistance = true;
+    State.isDistanceIdeal = false;
+    State.distanceHoldTime = 0;
+    State.lastDistanceCheckTime = performance.now();
+    
+    if(D.holdProgress) D.holdProgress.classList.add('hidden');
+    if(D.progressRing) updateHoldProgress(0);
+};
+
+// === GAME FLOW ===
+window.startGame = function() {
+    AudioManager.init();
+    
+    D.menu.classList.add('hidden');
+    D.gameOver.classList.add('hidden');
+    if(D.leaderboard) D.leaderboard.classList.add('hidden');
+    if(D.shop) D.shop.classList.add('hidden');
+    if(D.settings) D.settings.classList.add('hidden');
+    if(D.settingsBtn) D.settingsBtn.classList.add('hidden');
+    
+    // NEW FLOW: Show tutorial if first time, else go to distance check
+    if (!PlayerData.hasSeenTutorial) {
+        if(D.tutorialOverlay) D.tutorialOverlay.classList.remove('hidden');
+    } else {
+        if(D.distanceOverlay) D.distanceOverlay.classList.remove('hidden');
+        State.waitingForIdealDistance = true;
+        State.isDistanceIdeal = false;
+        State.distanceHoldTime = 0;
+        State.lastDistanceCheckTime = performance.now();
+        
+        if(D.holdProgress) D.holdProgress.classList.add('hidden');
+        if(D.progressRing) updateHoldProgress(0);
+    }
+    
+    State.score = 0;
+    State.lives = 3;
+    State.combo = 0;
+    State.isFeverMode = false;
+    State.speedMultiplier = 1.0;
+    State.lastSpeedNotification = 0;
+    State.bombChance = 0.35;
+    State.fallingObjects = [];
+    State.particles = [];
+    State.isGameActive = false;
+    State.isCountingDown = false;
+    State.nosePulse = 0;
+    State.gameStartTime = 0;
+    State.scoreSaved = false;
+    State.warningTime = 0;
+    State.isPenaltyMode = false;
+    State.lastPenaltyCheck = 0;
+    
+    document.body.classList.remove('fever-mode');
+    updateUI();
+};
+
+// (Continue with rest - all previous functions - only showing penalty notification addition)
+
+function showPenaltyNotification(show) {
+    if (!D.penaltyNotification) return;
+    if (show) D.penaltyNotification.classList.remove('hidden');
+    else D.penaltyNotification.classList.add('hidden');
+}
+
+// In onResults, update penalty mode check:
+// (Inside State.isGameActive section)
+/*
+if (distanceStatus !== 'IDEAL') {
+    State.warningTime += (now - State.lastPenaltyCheck);
+    showProximityWarning(true);
+    
+    if (State.warningTime >= DISTANCE.PENALTY_THRESHOLD && !State.isPenaltyMode) {
+        State.isPenaltyMode = true;
+        showDangerZone(true);
+        showPenaltyNotification(true); // NEW
+    }
+} else {
+    State.warningTime = 0;
+    if (State.isPenaltyMode) {
+        State.isPenaltyMode = false;
+        showDangerZone(false);
+        showPenaltyNotification(false); // NEW
+    }
+    showProximityWarning(false);
+}
+*/
+
+// DUE TO SIZE CONSTRAINTS, I'll note this is a targeted update showing key changes.
+// The full file would be too large. Let me create a more focused update using multi_replace instead.

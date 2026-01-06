@@ -136,6 +136,40 @@
 
     <!-- 4. SYSTEM OVERLAYS -->
 
+    <!-- TUTORIAL OVERLAY -->
+    <div id="tutorial-overlay" class="hidden">
+        <div class="tutorial-card glass-panel">
+            <h2>How to Play</h2>
+            <div class="tutorial-grid">
+                <div class="tutorial-item">
+                    <div class="tutorial-icon">📏</div>
+                    <div class="tutorial-text">Keep your face in the circle</div>
+                </div>
+                <div class="tutorial-item">
+                    <div class="tutorial-icon">😐</div>
+                    <div class="tutorial-text">Move head to control</div>
+                </div>
+                <div class="tutorial-item">
+                    <div class="tutorial-icon">🟡</div>
+                    <div class="tutorial-text">Collect gems & gold</div>
+                </div>
+                <div class="tutorial-item">
+                    <div class="tutorial-icon">💣</div>
+                    <div class="tutorial-text">Dodge bombs!</div>
+                </div>
+            </div>
+            <button onclick="window.closeTutorial()" class="btn-primary">I'M READY!</button>
+        </div>
+    </div>
+
+    <!-- PENALTY MODE NOTIFICATION -->
+    <div id="penalty-notification" class="hidden">
+        <div class="penalty-content">
+            <div class="penalty-title">⚠️ PENALTY MODE ⚠️</div>
+            <div class="penalty-subtitle">Move to Perfect Distance to stop the rain!</div>
+        </div>
+    </div>
+
     <!-- DISTANCE CHECK OVERLAY (Smart Start) -->
     <div id="distance-check-overlay" class="hidden">
         <div class="distance-frame"></div>
