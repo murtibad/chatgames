@@ -34,7 +34,10 @@
     <div id="vignette-overlay"></div>
 
     <!-- 2. GLOBAL HUD (Always Visible) -->
-    <button id="mute-btn">🔊</button>
+    <div id="audio-controls">
+        <button id="mute-btn">🔊</button>
+        <input type="range" id="volume-slider" min="0" max="100" value="100">
+    </div>
 
     <div id="score-hud" class="hidden">
         <span class="hud-label">SCORE</span>

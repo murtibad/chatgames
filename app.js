@@ -1,8 +1,8 @@
-// v0.9.9 MOBILE & BUG FIXES - app.js
+// v1.0.0 FINAL POLISH - app.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-console.log("📱 v0.9.9 MOBILE & BUG FIXES INITIALIZED");
+console.log("🎯 v1.0.0 FINAL POLISH");
 
 // === FIREBASE CONFIG ===
 const CONFIG = {
@@ -23,15 +23,22 @@ try {
     console.warn("Firebase Offline:", e);
 }
 
-// === localStorage PERSISTENCE ===
+// === VIRTUAL PLAY AREA (Desktop/Mobile Balance) ===
+const MAX_PLAY_WIDTH = 600;
+
+function getPlayArea() {
+    const playWidth = Math.min(window.innerWidth, MAX_PLAY_WIDTH);
+    const playXStart = (window.innerWidth - playWidth) / 2;
+    return { playWidth, playXStart };
+}
+
+// === localStorage ===
 const STORAGE_KEY = 'chatgames_data';
 
 function loadPlayerData() {
     try {
         const data = localStorage.getItem(STORAGE_KEY);
-        if (data) {
-            return JSON.parse(data);
-        }
+        if (data) return JSON.parse(data);
     } catch (e) {
         console.warn("localStorage load error:", e);
     }
@@ -40,7 +47,8 @@ function loadPlayerData() {
         totalCoins: 0,
         inventory: ['default'],
         equippedSkin: 'default',
-        lastUsername: ''
+        lastUsername: '',
+        volume: 1.0 // NEW: Volume setting
     };
 }
 
@@ -54,7 +62,7 @@ function savePlayerData(data) {
 
 const PlayerData = loadPlayerData();
 
-// === SHOP ITEMS (WITH PAY-TO-WIN MECHANICS) ===
+// === SHOP ITEMS ===
 const SHOP_ITEMS = [
     {
         id: 'default',
@@ -62,7 +70,7 @@ const SHOP_ITEMS = [
         price: 0,
         color: '#00f2ea',
         type: 'circle',
-        hitboxMultiplier: 1.0, // Standard
+        hitboxMultiplier: 1.0,
         description: 'Classic cyan glow'
     },
     {
@@ -71,7 +79,7 @@ const SHOP_ITEMS = [
         price: 500,
         color: '#ff0050',
         type: 'circle',
-        hitboxMultiplier: 1.5, // 50% easier
+        hitboxMultiplier: 1.5,
         description: 'Red & bigger reach'
     },
     {
@@ -80,7 +88,7 @@ const SHOP_ITEMS = [
         price: 1000,
         color: '#00ff00',
         type: 'square',
-        hitboxMultiplier: 2.0, // Double reach
+        hitboxMultiplier: 2.0,
         description: 'Tech precision'
     },
     {
@@ -89,16 +97,16 @@ const SHOP_ITEMS = [
         price: 2000,
         color: '#FFD700',
         type: 'circle',
-        hitboxMultiplier: 2.5, // Magnetic
+        hitboxMultiplier: 2.5,
         description: 'Premium magnet'
     }
 ];
 
-// === PRE-RENDERED SPRITES ===
+// === PRE-RENDERED SPRITES (GLOW FIX) ===
 const diamondSprite = document.createElement('canvas');
 const goldDiamondSprite = document.createElement('canvas');
 const bombSprite = document.createElement('canvas');
-const spriteSize = 64;
+const spriteSize = 128; // INCREASED from 64 to prevent glow cutoff
 
 function preRenderDiamond() {
     diamondSprite.width = spriteSize;
@@ -106,9 +114,9 @@ function preRenderDiamond() {
     const ctx = diamondSprite.getContext('2d');
     const cx = spriteSize / 2;
     const cy = spriteSize / 2;
-    const size = spriteSize / 2.5;
+    const size = spriteSize / 5; // Smaller relative to canvas
 
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 20;
     ctx.shadowColor = "rgba(0, 255, 255, 0.8)";
 
     ctx.beginPath();
@@ -138,9 +146,9 @@ function preRenderGoldDiamond() {
     const ctx = goldDiamondSprite.getContext('2d');
     const cx = spriteSize / 2;
     const cy = spriteSize / 2;
-    const size = spriteSize / 2.5;
+    const size = spriteSize / 5;
 
-    ctx.shadowBlur = 25;
+    ctx.shadowBlur = 30;
     ctx.shadowColor = "rgba(255, 215, 0, 1.0)";
 
     ctx.beginPath();
@@ -170,9 +178,9 @@ function preRenderBomb() {
     const ctx = bombSprite.getContext('2d');
     const cx = spriteSize / 2;
     const cy = spriteSize / 2;
-    const radius = spriteSize / 3;
+    const radius = spriteSize / 6;
 
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 20;
     ctx.shadowColor = "rgba(255, 0, 80, 0.8)";
 
     const gradient = ctx.createRadialGradient(cx - 5, cy - 5, 0, cx, cy, radius);
@@ -228,6 +236,7 @@ const D = {
     shareBtn: getEl('btn-share'),
     snapshotBtn: getEl('btn-snapshot'),
     muteBtn: getEl('mute-btn'),
+    volumeSlider: getEl('volume-slider'),
     list: getEl('leaderboard-list'),
     coinCount: getEl('coin-count'),
     shopItems: getEl('shop-items'),
@@ -254,7 +263,9 @@ const State = {
     faceScale: 0.1,
     lastKnownNose: { x: 0, y: 0 },
     muted: false,
-    noseStyle: PlayerData.equippedSkin
+    volume: PlayerData.volume,
+    noseStyle: PlayerData.equippedSkin,
+    nosePulse: 0 // NEW: For breathing animation
 };
 
 // === CLASSES ===
@@ -291,16 +302,17 @@ class Particle {
 class FallingObject {
     constructor(w, h, type, speedMult, spawnWidthRatio) {
         this.type = type;
-        // MOBILE RESPONSIVE: Dynamic sizing
-        this.radius = Math.max(20, w * 0.08); // 8% of screen width
 
-        const range = w * spawnWidthRatio;
-        const minX = (w - range) / 2;
+        // BALANCED: Use virtual play area
+        const { playWidth, playXStart } = getPlayArea();
+        this.radius = Math.max(20, playWidth * 0.12); // 12% of PLAY area
+
+        const range = playWidth * spawnWidthRatio;
+        const minX = playXStart + (playWidth - range) / 2;
         this.x = minX + Math.random() * range;
 
         this.y = -this.radius * 2;
-        // MOBILE RESPONSIVE: Speed relative to height
-        const baseSpeed = h * 0.008; // 0.8% of screen height per frame
+        const baseSpeed = h * 0.008;
         this.speed = (Math.random() * baseSpeed + baseSpeed) * speedMult;
 
         this.color = type === 'gem' ? '#00f2ea' : (type === 'gold' ? '#FFD700' : '#ff0050');
@@ -328,10 +340,20 @@ class FallingObject {
 // === AUDIO ENGINE ===
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = new AudioCtx();
+let masterGain;
+
+function initAudio() {
+    if (!masterGain) {
+        masterGain = audioCtx.createGain();
+        masterGain.connect(audioCtx.destination);
+        masterGain.gain.value = State.volume;
+    }
+}
 
 function playGemSound() {
     if (State.muted) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    initAudio();
 
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
@@ -344,7 +366,7 @@ function playGemSound() {
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
 
     osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(masterGain);
     osc.start();
     osc.stop(audioCtx.currentTime + 0.2);
 }
@@ -352,6 +374,7 @@ function playGemSound() {
 function playBombSound() {
     if (State.muted) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    initAudio();
 
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
@@ -364,7 +387,7 @@ function playBombSound() {
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
 
     osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(masterGain);
     osc.start();
     osc.stop(audioCtx.currentTime + 0.35);
 }
@@ -372,6 +395,7 @@ function playBombSound() {
 function playGoldSound() {
     if (State.muted) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    initAudio();
 
     const notes = [523.25, 659.25, 783.99];
 
@@ -387,7 +411,7 @@ function playGoldSound() {
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
 
             osc.connect(gain);
-            gain.connect(audioCtx.destination);
+            gain.connect(masterGain);
             osc.start();
             osc.stop(audioCtx.currentTime + 0.35);
         }, i * 50);
@@ -430,11 +454,13 @@ function updateCoinDisplay() {
 
 function triggerVisualEffect(type) {
     if (type === 'score') {
-        const hud = D.scoreHud;
-        if (hud) {
-            hud.classList.remove('score-pulse-anim');
-            void hud.offsetWidth;
-            hud.classList.add('score-pulse-anim');
+        // COLOR FLASH instead of bounce
+        const scoreEl = D.scoreVal;
+        if (scoreEl) {
+            scoreEl.classList.remove('score-flash');
+            void scoreEl.offsetWidth;
+            scoreEl.classList.add('score-flash');
+            setTimeout(() => scoreEl.classList.remove('score-flash'), 300);
         }
     } else if (type === 'damage') {
         if (D.uiLayer) {
@@ -493,34 +519,57 @@ function renderShop() {
         previewCanvas.height = 40;
         const ctx = previewCanvas.getContext('2d');
 
-        // ENHANCED VISUALS
+        // ENHANCED 3D VISUALS
         if (item.type === 'circle') {
             const radius = item.id === 'clown' ? 18 : 15;
-            ctx.beginPath();
-            ctx.arc(20, 20, radius, 0, Math.PI * 2);
 
-            if (item.id === 'gold') {
+            if (item.id === 'clown') {
+                // 3D CLOWN with highlight
+                const grad = ctx.createRadialGradient(15, 15, 0, 20, 20, radius);
+                grad.addColorStop(0, '#FF9999');
+                grad.addColorStop(0.4, item.color);
+                grad.addColorStop(1, '#8B0000');
+                ctx.fillStyle = grad;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = item.color;
+                ctx.beginPath();
+                ctx.arc(20, 20, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // White highlight
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.beginPath();
+                ctx.arc(15, 15, 5, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (item.id === 'gold') {
                 const grad = ctx.createRadialGradient(20, 15, 0, 20, 20, radius);
                 grad.addColorStop(0, '#FFEB3B');
                 grad.addColorStop(0.5, item.color);
                 grad.addColorStop(1, '#B8860B');
                 ctx.fillStyle = grad;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = item.color;
+                ctx.beginPath();
+                ctx.arc(20, 20, radius, 0, Math.PI * 2);
+                ctx.fill();
             } else {
                 ctx.fillStyle = item.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = item.color;
+                ctx.beginPath();
+                ctx.arc(20, 20, radius, 0, Math.PI * 2);
+                ctx.fill();
             }
-
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = item.color;
-            ctx.fill();
         } else {
-            // Cyborg HUD
+            // CYBORG with dashed lines
             ctx.strokeStyle = item.color;
             ctx.lineWidth = 3;
             ctx.shadowBlur = 10;
             ctx.shadowColor = item.color;
+            ctx.setLineDash([3, 3]);
             ctx.strokeRect(7, 7, 26, 26);
 
-            // Crosshair
+            ctx.setLineDash([]);
             ctx.beginPath();
             ctx.moveTo(20, 10);
             ctx.lineTo(20, 30);
@@ -539,7 +588,6 @@ function renderShop() {
         price.className = 'shop-item-price';
         price.innerText = item.price === 0 ? 'FREE' : `${item.price} 🪙`;
 
-        // Display hitbox advantage
         const bonus = document.createElement('div');
         bonus.style.fontSize = '0.75rem';
         bonus.style.color = '#00f2ea';
@@ -621,6 +669,7 @@ window.startGame = function () {
     State.fallingObjects = [];
     State.particles = [];
     State.isGameActive = false;
+    State.nosePulse = 0;
 
     document.body.classList.remove('fever-mode');
 
@@ -668,7 +717,6 @@ function endGame() {
     D.gameOver.classList.remove('hidden');
     document.body.classList.remove('fever-mode');
 
-    // ECONOMY: Add score to coins
     PlayerData.totalCoins += State.score;
     savePlayerData(PlayerData);
     updateCoinDisplay();
@@ -695,55 +743,90 @@ function gameLoop() {
     const noseXPx = State.lastKnownNose.x;
     const noseYPx = State.lastKnownNose.y;
 
+    // NOSE PULSE ANIMATION
+    State.nosePulse += 0.05;
+    const pulseScale = 1 + Math.sin(State.nosePulse) * 0.05; // 0.95 to 1.05
+
     // ENHANCED NOSE RENDERING
     ctx.save();
 
     const skinData = SHOP_ITEMS.find(s => s.id === State.noseStyle) || SHOP_ITEMS[0];
+
+    ctx.translate(noseXPx, noseYPx);
+    ctx.scale(pulseScale, pulseScale);
+    ctx.translate(-noseXPx, -noseYPx);
 
     if (skinData.type === 'circle') {
         let radius = 10;
         let blur = 15;
 
         if (skinData.id === 'clown') {
-            radius = 18; // Larger clown nose
-            // Gradient for 3D effect
-            const grad = ctx.createRadialGradient(noseXPx - 3, noseYPx - 3, 0, noseXPx, noseYPx, radius);
-            grad.addColorStop(0, '#FF6B9D');
-            grad.addColorStop(0.7, skinData.color);
+            radius = 18;
+            // 3D GRADIENT with highlight
+            const grad = ctx.createRadialGradient(noseXPx - 5, noseYPx - 5, 0, noseXPx, noseYPx, radius);
+            grad.addColorStop(0, '#FF9999');
+            grad.addColorStop(0.4, skinData.color);
             grad.addColorStop(1, '#8B0000');
             ctx.fillStyle = grad;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = skinData.color;
+            ctx.beginPath();
+            ctx.arc(noseXPx, noseYPx, radius, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // White highlight
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.beginPath();
+            ctx.arc(noseXPx - 5, noseYPx - 5, 4, 0, 2 * Math.PI);
+            ctx.fill();
+
         } else if (skinData.id === 'gold') {
-            blur = 25; // Enhanced glow
+            blur = 25;
             const grad = ctx.createRadialGradient(noseXPx, noseYPx - 5, 0, noseXPx, noseYPx, 12);
             grad.addColorStop(0, '#FFEB3B');
             grad.addColorStop(0.5, skinData.color);
             grad.addColorStop(1, '#B8860B');
             ctx.fillStyle = grad;
+            ctx.shadowBlur = blur;
+            ctx.shadowColor = skinData.color;
+            ctx.beginPath();
+            ctx.arc(noseXPx, noseYPx, 12, 0, 2 * Math.PI);
+            ctx.fill();
         } else {
             ctx.fillStyle = skinData.color;
+            ctx.shadowBlur = blur;
+            ctx.shadowColor = skinData.color;
+            ctx.beginPath();
+            ctx.arc(noseXPx, noseYPx, radius, 0, 2 * Math.PI);
+            ctx.fill();
         }
 
-        ctx.beginPath();
-        ctx.arc(noseXPx, noseYPx, radius, 0, 2 * Math.PI);
-        ctx.shadowBlur = blur;
-        ctx.shadowColor = skinData.color;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        if (skinData.id !== 'clown') {
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(noseXPx, noseYPx, radius, 0, 2 * Math.PI);
+            ctx.stroke();
+        }
     } else {
-        // Cyborg HUD Targeting System
+        // CYBORG: Rotating HUD
+        const rotation = (State.nosePulse * 2) % (Math.PI * 2);
+
+        ctx.translate(noseXPx, noseYPx);
+        ctx.rotate(rotation);
+        ctx.translate(-noseXPx, -noseYPx);
+
         ctx.strokeStyle = skinData.color;
         ctx.lineWidth = 3;
         ctx.shadowBlur = 20;
         ctx.shadowColor = skinData.color;
+        ctx.setLineDash([5, 5]);
 
-        // Outer square
         ctx.strokeRect(noseXPx - 15, noseYPx - 15, 30, 30);
 
-        // Crosshair
+        ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(noseXPx, noseYPx - 20);
         ctx.lineTo(noseXPx, noseYPx + 20);
@@ -751,7 +834,6 @@ function gameLoop() {
         ctx.lineTo(noseXPx + 20, noseYPx);
         ctx.stroke();
 
-        // Corner brackets
         ctx.strokeRect(noseXPx - 18, noseYPx - 18, 5, 5);
         ctx.strokeRect(noseXPx + 13, noseYPx - 18, 5, 5);
         ctx.strokeRect(noseXPx - 18, noseYPx + 13, 5, 5);
@@ -789,9 +871,8 @@ function gameLoop() {
         State.lastSpawnTime = now;
     }
 
-    // PAY-TO-WIN: Get hitbox multiplier
     const hitboxBonus = skinData.hitboxMultiplier;
-    const effectiveRadius = 15 * hitboxBonus; // Base 15px radius
+    const effectiveRadius = 15 * hitboxBonus;
 
     for (let i = State.fallingObjects.length - 1; i >= 0; i--) {
         const obj = State.fallingObjects[i];
@@ -968,22 +1049,19 @@ window.closeLeaderboard = function () {
     D.menu.classList.remove('hidden');
 };
 
-// === SNAPSHOT FIX: Include Video ===
+// === SNAPSHOT ===
 function saveSnapshot() {
     try {
-        // Create temp canvas
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = D.canvas.width;
         tempCanvas.height = D.canvas.height;
         const tempCtx = tempCanvas.getContext('2d');
 
-        // Draw video first (background)
         tempCtx.save();
-        tempCtx.scale(-1, 1); // Mirror video
+        tempCtx.scale(-1, 1);
         tempCtx.drawImage(D.video, -tempCanvas.width, 0, tempCanvas.width, tempCanvas.height);
         tempCtx.restore();
 
-        // Draw game canvas on top
         tempCtx.drawImage(D.canvas, 0, 0);
 
         const dataURL = tempCanvas.toDataURL('image/png');
@@ -1017,11 +1095,24 @@ if (D.muteBtn) {
     };
 }
 
+// VOLUME SLIDER
+if (D.volumeSlider) {
+    D.volumeSlider.value = State.volume * 100;
+    D.volumeSlider.oninput = (e) => {
+        State.volume = e.target.value / 100;
+        PlayerData.volume = State.volume;
+        savePlayerData(PlayerData);
+
+        if (masterGain) {
+            masterGain.gain.value = State.volume;
+        }
+    };
+}
+
 if (D.shopBtn) {
     D.shopBtn.onclick = window.openShop;
 }
 
-// LEADERBOARD FIX: Proper event listener
 if (D.leaderboardBtn) {
     D.leaderboardBtn.onclick = window.openLeaderboard;
 }
@@ -1090,4 +1181,4 @@ if (D.shareBtn) {
 // Init
 updateCoinDisplay();
 initSystem();
-console.log("✓ v0.9.9 READY - Mobile Optimized, Bug-Free");
+console.log("✓ v1.0.0 READY - Final Polish Complete");
