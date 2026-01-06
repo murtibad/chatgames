@@ -54,7 +54,7 @@
                 <div class="icon-lg">🎮</div>
                 <h3>Nose Hunter</h3>
                 <p>Catch points, avoid bombs!</p>
-                <button onclick="window.startGame()" class="btn-primary">PLAY NOW</button>
+                <button id="btn-play-now" class="btn-primary">PLAY NOW</button>
             </div>
 
             <div class="coin-display">
@@ -83,18 +83,18 @@
             <div id="save-msg"></div>
 
             <div class="action-row">
-                <button onclick="window.restartGame()" class="btn-primary" style="flex: 1;">🔄 Restart</button>
+                <button id="btn-restart" class="btn-primary" style="flex: 1;">🔄 Restart</button>
                 <button id="btn-share" class="btn-secondary" style="flex: 1;">🔗 Share</button>
             </div>
             <button id="btn-snapshot" class="btn-secondary">📸 Save Photo</button>
-            <button onclick="window.goHome()" class="btn-text">Back to Home</button>
+            <button id="btn-home" class="btn-text">Back to Home</button>
         </div>
 
         <!-- LEADERBOARD SCREEN -->
         <div id="leaderboard-screen" class="glass-panel hidden">
             <h2>TOP PLAYERS</h2>
             <div id="leaderboard-list">Loading...</div>
-            <button onclick="window.closeLeaderboard()" class="btn-secondary">CLOSE</button>
+            <button id="btn-close-leaderboard" class="btn-secondary">CLOSE</button>
         </div>
 
         <!-- STYLE SHOP SCREEN -->
@@ -106,7 +106,7 @@
                 <!-- Items populated by JS -->
             </div>
 
-            <button onclick="window.closeShop()" class="btn-secondary">CLOSE</button>
+            <button id="btn-close-shop" class="btn-secondary">CLOSE</button>
         </div>
 
         <!-- SETTINGS MODAL -->
@@ -129,7 +129,7 @@
                 </label>
             </div>
 
-            <button onclick="window.closeSettings()" class="btn-secondary">CLOSE</button>
+            <button id="btn-close-settings" class="btn-secondary">CLOSE</button>
         </div>
 
     </div>
@@ -158,7 +158,7 @@
                     <div class="tutorial-text">Dodge bombs!</div>
                 </div>
             </div>
-            <button onclick="window.closeTutorial()" class="btn-primary">I'M READY!</button>
+            <button id="btn-close-tutorial" class="btn-primary">I'M READY!</button>
         </div>
     </div>
 
