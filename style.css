@@ -1,4 +1,4 @@
-/* v1.1.0 PROXIMITY SYSTEM - style.css */
+/* v1.1.1 CRITICAL FIXES & POLISH - style.css */
 
 :root {
     --cyan: #00f2ea;
@@ -271,6 +271,8 @@ button:active {
     background: rgba(0, 242, 234, 0.2);
     border-color: var(--cyan);
     box-shadow: 0 0 20px rgba(0, 242, 234, 0.3);
+    transform: rotate(90deg);
+    /* Rotating gear */
 }
 
 #score-hud {
@@ -317,11 +319,12 @@ body.fever-mode #score-val {
     letter-spacing: 1px;
 }
 
-/* 7. PROXIMITY SYSTEM */
+/* 7. PROXIMITY SYSTEM (LIGHTER BACKGROUND) */
 #distance-check-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.3);
+    /* LIGHTER from 0.9 */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -369,6 +372,30 @@ body.fever-mode #score-val {
     text-align: center;
 }
 
+/* HOLD PROGRESS INDICATOR */
+#hold-progress {
+    margin-top: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+#hold-progress svg {
+    transform: rotate(-90deg);
+}
+
+#progress-ring {
+    transition: stroke-dashoffset 0.1s linear;
+}
+
+#hold-text {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--cyan);
+    text-shadow: 0 0 10px var(--cyan);
+}
+
 #proximity-warning {
     position: fixed;
     top: 50%;
@@ -402,7 +429,53 @@ body.fever-mode #score-val {
     }
 }
 
-/* 8. SETTINGS MODAL */
+/* 8. SETTINGS MODAL (POPOVER STYLE) */
+#settings-modal {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    width: 320px;
+    transform: none;
+    animation: popoverSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 9999;
+}
+
+@keyframes popoverSlide {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Mobile: Bottom Sheet */
+@media (max-width: 480px) {
+    #settings-modal {
+        top: auto;
+        bottom: 0;
+        right: 0;
+        left: 0;
+        width: 100%;
+        max-width: 100%;
+        border-radius: 32px 32px 0 0;
+        animation: bottomSheet 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes bottomSheet {
+        from {
+            transform: translateY(100%);
+        }
+
+        to {
+            transform: translateY(0);
+        }
+    }
+}
+
 .setting-item {
     margin: 20px 0;
     display: flex;
@@ -415,14 +488,29 @@ body.fever-mode #score-val {
     color: rgba(255, 255, 255, 0.8);
 }
 
+.slider-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#volume-percentage {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--cyan);
+    min-width: 40px;
+}
+
+/* ENHANCED SLIDER WITH FILL */
 .styled-slider {
-    width: 200px;
+    width: 150px;
     height: 6px;
     -webkit-appearance: none;
     appearance: none;
-    background: rgba(255, 255, 255, 0.2);
+    background: linear-gradient(to right, var(--cyan) 0%, var(--cyan) var(--value, 100%), #444 var(--value, 100%), #444 100%);
     border-radius: 3px;
     outline: none;
+    transition: background 0.1s;
 }
 
 .styled-slider::-webkit-slider-thumb {
@@ -838,7 +926,7 @@ input[type="text"]:focus {
     }
 
     .styled-slider {
-        width: 150px;
+        width: 120px;
     }
 
     .distance-frame {
