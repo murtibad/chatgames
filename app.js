@@ -1,8 +1,8 @@
-// v0.9.6 FINAL PREMIUM - app.js
+// v0.9.7 FUN & REWARDING - app.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-console.log("💎 v0.9.6 FINAL PREMIUM INITIALIZED");
+console.log("💎 v0.9.7 FUN & REWARDING INITIALIZED");
 
 // === FIREBASE CONFIG ===
 const CONFIG = {
@@ -23,8 +23,9 @@ try {
     console.warn("Firebase Offline:", e);
 }
 
-// === PRE-RENDERED SPRITES (PERFORMANCE OPTIMIZATION) ===
+// === PRE-RENDERED SPRITES ===
 const diamondSprite = document.createElement('canvas');
+const goldDiamondSprite = document.createElement('canvas'); // NEW
 const bombSprite = document.createElement('canvas');
 const spriteSize = 64;
 
@@ -36,11 +37,9 @@ function preRenderDiamond() {
     const cy = spriteSize / 2;
     const size = spriteSize / 2.5;
 
-    // Outer Glow
     ctx.shadowBlur = 15;
     ctx.shadowColor = "rgba(0, 255, 255, 0.8)";
 
-    // Diamond Shape
     ctx.beginPath();
     ctx.moveTo(cx, cy - size);
     ctx.lineTo(cx + size, cy);
@@ -48,7 +47,6 @@ function preRenderDiamond() {
     ctx.lineTo(cx - size, cy);
     ctx.closePath();
 
-    // 3D Gradient Fill
     const gradient = ctx.createRadialGradient(cx, cy - 5, 0, cx, cy, size);
     gradient.addColorStop(0, "#E0FFFF");
     gradient.addColorStop(0.5, "#00FFFF");
@@ -57,7 +55,40 @@ function preRenderDiamond() {
     ctx.fillStyle = gradient;
     ctx.fill();
 
-    // Edge Highlight
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+}
+
+function preRenderGoldDiamond() {
+    goldDiamondSprite.width = spriteSize;
+    goldDiamondSprite.height = spriteSize;
+    const ctx = goldDiamondSprite.getContext('2d');
+    const cx = spriteSize / 2;
+    const cy = spriteSize / 2;
+    const size = spriteSize / 2.5;
+
+    // ENHANCED GLOW
+    ctx.shadowBlur = 25;
+    ctx.shadowColor = "rgba(255, 215, 0, 1.0)";
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size);
+    ctx.lineTo(cx + size, cy);
+    ctx.lineTo(cx, cy + size);
+    ctx.lineTo(cx - size, cy);
+    ctx.closePath();
+
+    // GOLD GRADIENT
+    const gradient = ctx.createRadialGradient(cx, cy - 5, 0, cx, cy, size);
+    gradient.addColorStop(0, "#FFF4A3"); // Bright center
+    gradient.addColorStop(0.5, "#FFD700"); // Gold
+    gradient.addColorStop(1, "#B8860B"); // Dark gold
+
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
     ctx.strokeStyle = "#FFFFFF";
     ctx.lineWidth = 2;
     ctx.stroke();
@@ -72,7 +103,6 @@ function preRenderBomb() {
     const cy = spriteSize / 2;
     const radius = spriteSize / 3;
 
-    // Bomb Body
     ctx.shadowBlur = 15;
     ctx.shadowColor = "rgba(255, 0, 80, 0.8)";
 
@@ -85,7 +115,6 @@ function preRenderBomb() {
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fill();
 
-    // Fuse
     ctx.shadowBlur = 0;
     ctx.strokeStyle = "#333";
     ctx.lineWidth = 3;
@@ -94,7 +123,6 @@ function preRenderBomb() {
     ctx.lineTo(cx, cy - radius - 10);
     ctx.stroke();
 
-    // Spark
     ctx.fillStyle = "#FFD700";
     ctx.beginPath();
     ctx.arc(cx, cy - radius - 12, 3, 0, Math.PI * 2);
@@ -102,6 +130,7 @@ function preRenderBomb() {
 }
 
 preRenderDiamond();
+preRenderGoldDiamond();
 preRenderBomb();
 
 // === DOM ELEMENTS ===
@@ -136,14 +165,15 @@ const State = {
     isGameActive: false,
     score: 0,
     lives: 3,
-    combo: 0, // NEW: Combo system
+    combo: 0,
+    isFeverMode: false, // NEW
     speedMultiplier: 1.0,
-    bombChance: 0.35, // NEW: Dynamic bomb chance
+    bombChance: 0.35,
     lastSpawnTime: 0,
     spawnInterval: 1200,
     fallingObjects: [],
     particles: [],
-    floatingTexts: [], // NEW: Floating text system
+    floatingTexts: [],
     noseX: 0.5,
     noseY: 0.5,
     faceScale: 0.1,
@@ -184,7 +214,7 @@ class Particle {
 
 class FallingObject {
     constructor(w, h, type, speedMult, spawnWidthRatio) {
-        this.type = type;
+        this.type = type; // 'gem', 'gold', 'bomb'
         this.radius = 30;
 
         const range = w * spawnWidthRatio;
@@ -194,7 +224,7 @@ class FallingObject {
         this.y = -60;
         this.speed = (Math.random() * 3 + 4) * speedMult;
 
-        this.color = type === 'gem' ? '#00f2ea' : '#ff0050';
+        this.color = type === 'gem' ? '#00f2ea' : (type === 'gold' ? '#FFD700' : '#ff0050');
     }
 
     update() {
@@ -202,7 +232,10 @@ class FallingObject {
     }
 
     draw(ctx) {
-        const sprite = this.type === 'gem' ? diamondSprite : bombSprite;
+        let sprite = bombSprite;
+        if (this.type === 'gem') sprite = diamondSprite;
+        if (this.type === 'gold') sprite = goldDiamondSprite;
+
         ctx.drawImage(
             sprite,
             this.x - this.radius,
@@ -213,27 +246,75 @@ class FallingObject {
     }
 }
 
-// === AUDIO & FX ===
+// === ENHANCED AUDIO ENGINE (SYNTHWAVE) ===
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = new AudioCtx();
 
-const beep = (freq, type = 'sine') => {
+function playGemSound() {
     if (State.muted) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
 
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1600, audioCtx.currentTime + 0.05);
+
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
 
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start();
     osc.stop(audioCtx.currentTime + 0.2);
-};
+}
+
+function playBombSound() {
+    if (State.muted) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.2);
+
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.35);
+}
+
+function playGoldSound() {
+    if (State.muted) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    // Major chord: C-E-G
+    const notes = [523.25, 659.25, 783.99];
+
+    notes.forEach((freq, i) => {
+        setTimeout(() => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+            gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.35);
+        }, i * 50);
+    });
+}
 
 function createExplosion(x, y, color) {
     for (let i = 0; i < 8; i++) {
@@ -241,9 +322,9 @@ function createExplosion(x, y, color) {
     }
 }
 
-function createFloatingText(text, x, y) {
+function createFloatingText(text, x, y, isJackpot = false) {
     const el = document.createElement('div');
-    el.className = 'floating-text';
+    el.className = 'floating-text' + (isJackpot ? ' jackpot' : '');
     el.innerText = text;
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
@@ -285,6 +366,17 @@ function triggerVisualEffect(type) {
     }
 }
 
+function updateFeverMode() {
+    if (State.combo >= 10 && !State.isFeverMode) {
+        State.isFeverMode = true;
+        document.body.classList.add('fever-mode');
+        createFloatingText("FEVER MODE! 2x", window.innerWidth / 2, window.innerHeight / 2);
+    } else if (State.combo < 10 && State.isFeverMode) {
+        State.isFeverMode = false;
+        document.body.classList.remove('fever-mode');
+    }
+}
+
 function showToast(message) {
     const toast = document.createElement("div");
     toast.className = "toast";
@@ -300,20 +392,21 @@ window.startGame = function () {
     if (D.leaderboard) D.leaderboard.classList.add('hidden');
     D.scoreHud.classList.remove('hidden');
 
-    // Reset State
     State.score = 0;
     State.lives = 3;
     State.combo = 0;
+    State.isFeverMode = false;
     State.speedMultiplier = 1.0;
     State.bombChance = 0.35;
     State.fallingObjects = [];
     State.particles = [];
     State.isGameActive = false;
 
+    document.body.classList.remove('fever-mode');
+
     updateUI();
     showCountdown();
 
-    // Watchdog
     setTimeout(() => {
         if (!State.isGameActive && D.overlay.style.display !== 'none') {
             console.warn("Watchdog: Forced Start");
@@ -336,10 +429,10 @@ function showCountdown() {
         count--;
         if (count > 0) {
             D.countText.innerText = count;
-            beep(600, 'square');
+            playGemSound();
         } else if (count === 0) {
             D.countText.innerText = "GO!";
-            beep(1200, 'square');
+            playGoldSound();
         } else {
             clearInterval(timer);
             D.overlay.style.display = 'none';
@@ -354,6 +447,7 @@ function endGame() {
     State.isGameActive = false;
     D.scoreHud.classList.add('hidden');
     D.gameOver.classList.remove('hidden');
+    document.body.classList.remove('fever-mode');
 
     const finalScoreEl = document.getElementById('final-score');
     if (finalScoreEl) finalScoreEl.innerText = State.score;
@@ -362,7 +456,7 @@ function endGame() {
     if (D.saveMsg) D.saveMsg.innerText = "";
     if (D.username) D.username.value = "";
 
-    beep(150, 'sawtooth');
+    playBombSound();
 }
 
 // === GAME LOOP ===
@@ -372,7 +466,6 @@ function gameLoop() {
     const ctx = D.canvas.getContext('2d');
     ctx.clearRect(0, 0, D.canvas.width, D.canvas.height);
 
-    // Draw Nose (MIRROR MODE FIX)
     const noseXPx = State.lastKnownNose.x;
     const noseYPx = State.lastKnownNose.y;
 
@@ -389,16 +482,13 @@ function gameLoop() {
     ctx.shadowBlur = 0;
     ctx.restore();
 
-    // Dynamic Difficulty
     const speedLevel = 1.0 + Math.floor(State.score / 50) * 0.1;
     State.speedMultiplier = speedLevel;
 
-    // Increase bomb chance after 100 points
     if (State.score >= 100) {
         State.bombChance = 0.45;
     }
 
-    // Cone Logic
     let safeWidthRatio = 1.0 - State.faceScale;
     if (safeWidthRatio < 0.4) safeWidthRatio = 0.4;
     if (safeWidthRatio > 0.95) safeWidthRatio = 0.95;
@@ -407,13 +497,21 @@ function gameLoop() {
     const now = performance.now();
 
     if (now - State.lastSpawnTime > currentInterval) {
-        const type = Math.random() > State.bombChance ? 'gem' : 'bomb';
+        let type = 'gem';
+        const rand = Math.random();
+
+        // 5% gold, 30% bomb, 65% gem
+        if (rand < 0.05) {
+            type = 'gold';
+        } else if (rand < 0.35) {
+            type = 'bomb';
+        }
+
         const obj = new FallingObject(D.canvas.width, D.canvas.height, type, State.speedMultiplier, safeWidthRatio);
         State.fallingObjects.push(obj);
         State.lastSpawnTime = now;
     }
 
-    // Object Updates & Collision
     for (let i = State.fallingObjects.length - 1; i >= 0; i--) {
         const obj = State.fallingObjects[i];
         obj.update();
@@ -423,40 +521,53 @@ function gameLoop() {
         const dy = obj.y - noseYPx;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Collision
         if (distance < (obj.radius + 15)) {
             State.fallingObjects.splice(i, 1);
+
             if (obj.type === 'gem') {
-                State.score += 10;
+                const points = State.isFeverMode ? 20 : 10;
+                State.score += points;
                 State.combo++;
+                updateFeverMode();
                 triggerVisualEffect('score');
                 createExplosion(obj.x, obj.y, '#00f2ea');
-                beep(600 + (State.score), 'sine');
+                playGemSound();
 
-                // Combo Milestones
                 if (State.combo === 5) createFloatingText("+25 COMBO!", obj.x, obj.y);
                 if (State.combo === 10) createFloatingText("+50 COMBO!", obj.x, obj.y);
                 if (State.combo === 15) createFloatingText("+100 EPIC!", obj.x, obj.y);
 
+            } else if (obj.type === 'gold') {
+                State.score += 50;
+                State.combo++;
+                updateFeverMode();
+                triggerVisualEffect('score');
+                createExplosion(obj.x, obj.y, '#FFD700');
+                createFloatingText("JACKPOT! +50", obj.x, obj.y, true);
+                playGoldSound();
+
             } else {
                 State.lives--;
-                State.combo = 0; // Reset combo
+                State.combo = 0;
+                State.isFeverMode = false;
+                document.body.classList.remove('fever-mode');
                 triggerVisualEffect('damage');
                 createExplosion(obj.x, obj.y, '#ff0050');
-                beep(150, 'sawtooth');
+                playBombSound();
             }
             updateUI();
             if (State.lives <= 0) { endGame(); return; }
             continue;
         }
 
-        // Miss Logic
         if (obj.y > D.canvas.height) {
-            if (obj.type === 'gem') {
+            if (obj.type === 'gem' || obj.type === 'gold') {
                 State.lives--;
                 State.combo = 0;
+                State.isFeverMode = false;
+                document.body.classList.remove('fever-mode');
                 triggerVisualEffect('damage');
-                beep(100, 'square');
+                playBombSound();
             }
             State.fallingObjects.splice(i, 1);
             updateUI();
@@ -464,7 +575,6 @@ function gameLoop() {
         }
     }
 
-    // Particles
     for (let i = State.particles.length - 1; i >= 0; i--) {
         const p = State.particles[i];
         p.update();
@@ -486,14 +596,12 @@ function onResults(results) {
         const landmarks = results.multiFaceLandmarks[0];
         const nose = landmarks[4];
 
-        // MIRROR MODE FIX: Invert X coordinate
-        State.noseX = nose.x; // Already mirrored by CSS
+        State.noseX = nose.x;
         State.noseY = nose.y;
 
         State.lastKnownNose.x = State.noseX * D.canvas.width;
         State.lastKnownNose.y = State.noseY * D.canvas.height;
 
-        // Face Scale
         const leftCheek = landmarks[234];
         const rightCheek = landmarks[454];
         const dx = Math.abs(leftCheek.x - rightCheek.x);
@@ -501,7 +609,6 @@ function onResults(results) {
     }
 }
 
-// MediaPipe Init
 let faceMesh, camera;
 async function initSystem() {
     try {
@@ -587,9 +694,9 @@ window.goHome = () => {
     D.gameOver.classList.add('hidden');
     if (D.leaderboard) D.leaderboard.classList.add('hidden');
     D.menu.classList.remove('hidden');
+    document.body.classList.remove('fever-mode');
 };
 
-// Mute
 if (D.muteBtn) {
     D.muteBtn.onclick = () => {
         State.muted = !State.muted;
@@ -598,7 +705,6 @@ if (D.muteBtn) {
     };
 }
 
-// Save Score
 if (D.saveBtn) {
     D.saveBtn.onclick = async () => {
         if (!db) {
@@ -628,7 +734,6 @@ if (D.saveBtn) {
     };
 }
 
-// Share
 if (D.shareBtn) {
     D.shareBtn.onclick = async () => {
         const shareData = {
@@ -637,7 +742,6 @@ if (D.shareBtn) {
             url: window.location.href,
         };
 
-        // Try native share first
         if (navigator.share) {
             try {
                 await navigator.share(shareData);
@@ -645,9 +749,7 @@ if (D.shareBtn) {
             } catch (err) {
                 console.log('Share cancelled');
             }
-        }
-        // Fallback to clipboard
-        else {
+        } else {
             try {
                 await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
                 showToast("Link copied! 📋");
@@ -658,6 +760,5 @@ if (D.shareBtn) {
     };
 }
 
-// === INIT ===
 initSystem();
-console.log("✓ v0.9.6 READY");
+console.log("✓ v0.9.7 READY");

@@ -1,4 +1,4 @@
-/* v0.9.6 FINAL PREMIUM - style.css */
+/* v0.9.7 FUN & REWARDING - style.css */
 
 :root {
     --cyan: #00f2ea;
@@ -27,10 +27,33 @@ html {
     overflow: hidden;
     color: white;
     font-family: var(--font);
+
+    /* MOBILE SCROLL PREVENTION */
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
 }
 
 body {
     background: linear-gradient(135deg, #0f172a 0%, #000 100%);
+    transition: background 0.3s ease;
+}
+
+/* FEVER MODE */
+body.fever-mode {
+    animation: feverPulse 1s infinite;
+}
+
+@keyframes feverPulse {
+
+    0%,
+    100% {
+        background: linear-gradient(135deg, #0f172a 0%, #000 100%);
+    }
+
+    50% {
+        background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(0, 242, 234, 0.1) 100%);
+    }
 }
 
 #videoElement,
@@ -42,6 +65,8 @@ body {
     height: 100vh;
     object-fit: cover;
     transform: scaleX(-1);
+    touch-action: none;
+    /* Prevent scroll */
 }
 
 #videoElement {
@@ -76,25 +101,42 @@ body {
 /* 3. HOLO-GLASS PANELS (PREMIUM) */
 .glass-panel {
     pointer-events: auto;
-    /* Gradient Background (Holo Effect) */
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
-
-    /* Enhanced Border */
     border: 1px solid var(--border);
     border-radius: 32px;
     padding: 40px 30px;
     width: 90%;
     max-width: 400px;
     text-align: center;
-
-    /* Inner Glow + Outer Shadow */
     box-shadow:
         inset 0 0 20px rgba(255, 255, 255, 0.05),
         0 20px 50px rgba(0, 0, 0, 0.5);
-
     animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: border-color 0.3s;
+}
+
+/* FEVER MODE PANEL GLOW */
+body.fever-mode .glass-panel {
+    border-color: var(--gold);
+    animation: glassGlow 1s infinite;
+}
+
+@keyframes glassGlow {
+
+    0%,
+    100% {
+        box-shadow:
+            inset 0 0 20px rgba(255, 255, 255, 0.05),
+            0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+
+    50% {
+        box-shadow:
+            inset 0 0 30px rgba(255, 215, 0, 0.3),
+            0 20px 50px rgba(255, 215, 0, 0.3);
+    }
 }
 
 @keyframes slideUp {
@@ -241,11 +283,23 @@ button:active {
     gap: 15px;
     z-index: 90;
     font-weight: 800;
+    transition: all 0.3s;
+}
+
+/* FEVER MODE HUD */
+body.fever-mode #score-hud {
+    border-color: var(--gold);
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
 }
 
 #score-val {
     color: var(--cyan);
     font-size: 1.4rem;
+    transition: color 0.3s;
+}
+
+body.fever-mode #score-val {
+    color: var(--gold);
 }
 
 .hud-label {
@@ -287,7 +341,6 @@ button:active {
     font-size: 1.1rem;
 }
 
-/* Medal Colors */
 .leaderboard-item:nth-child(1) .name {
     color: var(--gold);
 }
@@ -378,8 +431,6 @@ input:focus {
 }
 
 /* 10. JUICY EFFECTS */
-
-/* Score Pulse */
 @keyframes scorePulse {
     0% {
         transform: scale(1);
@@ -400,7 +451,6 @@ input:focus {
     animation: scorePulse 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* Damage Flash */
 @keyframes damageFlash {
     0% {
         box-shadow: inset 0 0 0 0 transparent;
@@ -419,7 +469,6 @@ input:focus {
     animation: damageFlash 0.4s ease-out;
 }
 
-/* Hearts Shake */
 @keyframes heartShake {
 
     0%,
@@ -440,7 +489,6 @@ input:focus {
     animation: heartShake 0.3s ease-in-out;
 }
 
-/* Floating Text Animation */
 @keyframes floatUp {
     0% {
         transform: translateY(0) scale(0.5);
@@ -469,7 +517,13 @@ input:focus {
     animation: floatUp 1.5s ease-out forwards;
 }
 
-/* Toast Notifications */
+/* JACKPOT TEXT */
+.floating-text.jackpot {
+    font-size: 3rem;
+    color: var(--gold);
+    text-shadow: 0 0 30px var(--gold);
+}
+
 .toast {
     position: fixed;
     bottom: 80px;
