@@ -1,8 +1,8 @@
-// v0.9.8 ECONOMY & STYLE - app.js
+// v0.9.9 MOBILE & BUG FIXES - app.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-console.log("💰 v0.9.8 ECONOMY & STYLE INITIALIZED");
+console.log("📱 v0.9.9 MOBILE & BUG FIXES INITIALIZED");
 
 // === FIREBASE CONFIG ===
 const CONFIG = {
@@ -54,7 +54,7 @@ function savePlayerData(data) {
 
 const PlayerData = loadPlayerData();
 
-// === SHOP ITEMS ===
+// === SHOP ITEMS (WITH PAY-TO-WIN MECHANICS) ===
 const SHOP_ITEMS = [
     {
         id: 'default',
@@ -62,6 +62,7 @@ const SHOP_ITEMS = [
         price: 0,
         color: '#00f2ea',
         type: 'circle',
+        hitboxMultiplier: 1.0, // Standard
         description: 'Classic cyan glow'
     },
     {
@@ -70,7 +71,8 @@ const SHOP_ITEMS = [
         price: 500,
         color: '#ff0050',
         type: 'circle',
-        description: 'Red & playful'
+        hitboxMultiplier: 1.5, // 50% easier
+        description: 'Red & bigger reach'
     },
     {
         id: 'cyborg',
@@ -78,7 +80,8 @@ const SHOP_ITEMS = [
         price: 1000,
         color: '#00ff00',
         type: 'square',
-        description: 'Tech square frame'
+        hitboxMultiplier: 2.0, // Double reach
+        description: 'Tech precision'
     },
     {
         id: 'gold',
@@ -86,7 +89,8 @@ const SHOP_ITEMS = [
         price: 2000,
         color: '#FFD700',
         type: 'circle',
-        description: 'Premium sparkle'
+        hitboxMultiplier: 2.5, // Magnetic
+        description: 'Premium magnet'
     }
 ];
 
@@ -227,7 +231,8 @@ const D = {
     list: getEl('leaderboard-list'),
     coinCount: getEl('coin-count'),
     shopItems: getEl('shop-items'),
-    shopBtn: getEl('btn-shop')
+    shopBtn: getEl('btn-shop'),
+    leaderboardBtn: getEl('btn-leaderboard')
 };
 
 // === GAME STATE ===
@@ -249,7 +254,7 @@ const State = {
     faceScale: 0.1,
     lastKnownNose: { x: 0, y: 0 },
     muted: false,
-    noseStyle: PlayerData.equippedSkin // NEW
+    noseStyle: PlayerData.equippedSkin
 };
 
 // === CLASSES ===
@@ -286,14 +291,17 @@ class Particle {
 class FallingObject {
     constructor(w, h, type, speedMult, spawnWidthRatio) {
         this.type = type;
-        this.radius = 30;
+        // MOBILE RESPONSIVE: Dynamic sizing
+        this.radius = Math.max(20, w * 0.08); // 8% of screen width
 
         const range = w * spawnWidthRatio;
         const minX = (w - range) / 2;
         this.x = minX + Math.random() * range;
 
-        this.y = -60;
-        this.speed = (Math.random() * 3 + 4) * speedMult;
+        this.y = -this.radius * 2;
+        // MOBILE RESPONSIVE: Speed relative to height
+        const baseSpeed = h * 0.008; // 0.8% of screen height per frame
+        this.speed = (Math.random() * baseSpeed + baseSpeed) * speedMult;
 
         this.color = type === 'gem' ? '#00f2ea' : (type === 'gold' ? '#FFD700' : '#ff0050');
     }
@@ -485,19 +493,40 @@ function renderShop() {
         previewCanvas.height = 40;
         const ctx = previewCanvas.getContext('2d');
 
+        // ENHANCED VISUALS
         if (item.type === 'circle') {
+            const radius = item.id === 'clown' ? 18 : 15;
             ctx.beginPath();
-            ctx.arc(20, 20, 15, 0, Math.PI * 2);
-            ctx.fillStyle = item.color;
-            ctx.shadowBlur = 10;
+            ctx.arc(20, 20, radius, 0, Math.PI * 2);
+
+            if (item.id === 'gold') {
+                const grad = ctx.createRadialGradient(20, 15, 0, 20, 20, radius);
+                grad.addColorStop(0, '#FFEB3B');
+                grad.addColorStop(0.5, item.color);
+                grad.addColorStop(1, '#B8860B');
+                ctx.fillStyle = grad;
+            } else {
+                ctx.fillStyle = item.color;
+            }
+
+            ctx.shadowBlur = 15;
             ctx.shadowColor = item.color;
             ctx.fill();
         } else {
+            // Cyborg HUD
             ctx.strokeStyle = item.color;
             ctx.lineWidth = 3;
             ctx.shadowBlur = 10;
             ctx.shadowColor = item.color;
             ctx.strokeRect(7, 7, 26, 26);
+
+            // Crosshair
+            ctx.beginPath();
+            ctx.moveTo(20, 10);
+            ctx.lineTo(20, 30);
+            ctx.moveTo(10, 20);
+            ctx.lineTo(30, 20);
+            ctx.stroke();
         }
 
         preview.appendChild(previewCanvas);
@@ -509,6 +538,13 @@ function renderShop() {
         const price = document.createElement('div');
         price.className = 'shop-item-price';
         price.innerText = item.price === 0 ? 'FREE' : `${item.price} 🪙`;
+
+        // Display hitbox advantage
+        const bonus = document.createElement('div');
+        bonus.style.fontSize = '0.75rem';
+        bonus.style.color = '#00f2ea';
+        bonus.style.marginBottom = '5px';
+        bonus.innerText = `${item.hitboxMultiplier}x Reach`;
 
         const btn = document.createElement('button');
         btn.className = 'shop-item-btn';
@@ -528,6 +564,7 @@ function renderShop() {
 
         div.appendChild(preview);
         div.appendChild(name);
+        div.appendChild(bonus);
         div.appendChild(price);
         div.appendChild(btn);
 
@@ -658,18 +695,36 @@ function gameLoop() {
     const noseXPx = State.lastKnownNose.x;
     const noseYPx = State.lastKnownNose.y;
 
-    // DYNAMIC NOSE RENDERING
+    // ENHANCED NOSE RENDERING
     ctx.save();
 
     const skinData = SHOP_ITEMS.find(s => s.id === State.noseStyle) || SHOP_ITEMS[0];
 
     if (skinData.type === 'circle') {
-        const radius = skinData.id === 'clown' ? 15 : 10;
-        const blur = skinData.id === 'gold' ? 20 : 15;
+        let radius = 10;
+        let blur = 15;
+
+        if (skinData.id === 'clown') {
+            radius = 18; // Larger clown nose
+            // Gradient for 3D effect
+            const grad = ctx.createRadialGradient(noseXPx - 3, noseYPx - 3, 0, noseXPx, noseYPx, radius);
+            grad.addColorStop(0, '#FF6B9D');
+            grad.addColorStop(0.7, skinData.color);
+            grad.addColorStop(1, '#8B0000');
+            ctx.fillStyle = grad;
+        } else if (skinData.id === 'gold') {
+            blur = 25; // Enhanced glow
+            const grad = ctx.createRadialGradient(noseXPx, noseYPx - 5, 0, noseXPx, noseYPx, 12);
+            grad.addColorStop(0, '#FFEB3B');
+            grad.addColorStop(0.5, skinData.color);
+            grad.addColorStop(1, '#B8860B');
+            ctx.fillStyle = grad;
+        } else {
+            ctx.fillStyle = skinData.color;
+        }
 
         ctx.beginPath();
         ctx.arc(noseXPx, noseYPx, radius, 0, 2 * Math.PI);
-        ctx.fillStyle = skinData.color;
         ctx.shadowBlur = blur;
         ctx.shadowColor = skinData.color;
         ctx.fill();
@@ -679,11 +734,28 @@ function gameLoop() {
         ctx.lineWidth = 2;
         ctx.stroke();
     } else {
-        // Square (cyborg)
+        // Cyborg HUD Targeting System
         ctx.strokeStyle = skinData.color;
-        ctx.lineWidth = 3; ctx.shadowBlur = 15;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 20;
         ctx.shadowColor = skinData.color;
-        ctx.strokeRect(noseXPx - 12, noseYPx - 12, 24, 24);
+
+        // Outer square
+        ctx.strokeRect(noseXPx - 15, noseYPx - 15, 30, 30);
+
+        // Crosshair
+        ctx.beginPath();
+        ctx.moveTo(noseXPx, noseYPx - 20);
+        ctx.lineTo(noseXPx, noseYPx + 20);
+        ctx.moveTo(noseXPx - 20, noseYPx);
+        ctx.lineTo(noseXPx + 20, noseYPx);
+        ctx.stroke();
+
+        // Corner brackets
+        ctx.strokeRect(noseXPx - 18, noseYPx - 18, 5, 5);
+        ctx.strokeRect(noseXPx + 13, noseYPx - 18, 5, 5);
+        ctx.strokeRect(noseXPx - 18, noseYPx + 13, 5, 5);
+        ctx.strokeRect(noseXPx + 13, noseYPx + 13, 5, 5);
     }
 
     ctx.restore();
@@ -717,6 +789,10 @@ function gameLoop() {
         State.lastSpawnTime = now;
     }
 
+    // PAY-TO-WIN: Get hitbox multiplier
+    const hitboxBonus = skinData.hitboxMultiplier;
+    const effectiveRadius = 15 * hitboxBonus; // Base 15px radius
+
     for (let i = State.fallingObjects.length - 1; i >= 0; i--) {
         const obj = State.fallingObjects[i];
         obj.update();
@@ -726,7 +802,7 @@ function gameLoop() {
         const dy = obj.y - noseYPx;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (distance < (obj.radius + 15)) {
+        if (distance < (obj.radius + effectiveRadius)) {
             State.fallingObjects.splice(i, 1);
 
             if (obj.type === 'gem') {
@@ -765,7 +841,7 @@ function gameLoop() {
             continue;
         }
 
-        if (obj.y > D.canvas.height) {
+        if (obj.y > D.canvas.height + obj.radius) {
             if (obj.type === 'gem' || obj.type === 'gold') {
                 State.lives--;
                 State.combo = 0;
@@ -892,10 +968,25 @@ window.closeLeaderboard = function () {
     D.menu.classList.remove('hidden');
 };
 
-// === SNAPSHOT FEATURE ===
+// === SNAPSHOT FIX: Include Video ===
 function saveSnapshot() {
     try {
-        const dataURL = D.canvas.toDataURL('image/png');
+        // Create temp canvas
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = D.canvas.width;
+        tempCanvas.height = D.canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        // Draw video first (background)
+        tempCtx.save();
+        tempCtx.scale(-1, 1); // Mirror video
+        tempCtx.drawImage(D.video, -tempCanvas.width, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.restore();
+
+        // Draw game canvas on top
+        tempCtx.drawImage(D.canvas, 0, 0);
+
+        const dataURL = tempCanvas.toDataURL('image/png');
         const link = document.createElement('a');
         link.download = `chatgames_${Date.now()}.png`;
         link.href = dataURL;
@@ -922,12 +1013,17 @@ if (D.muteBtn) {
     D.muteBtn.onclick = () => {
         State.muted = !State.muted;
         D.muteBtn.style.opacity = State.muted ? 0.5 : 1.0;
-        D.muteBtn.innerHTML = State.muted ? '<i class="fa-solid fa-volume-xmark"></i>' : '<i class="fa-solid fa-volume-high"></i>';
+        D.muteBtn.innerText = State.muted ? '🔇' : '🔊';
     };
 }
 
 if (D.shopBtn) {
     D.shopBtn.onclick = window.openShop;
+}
+
+// LEADERBOARD FIX: Proper event listener
+if (D.leaderboardBtn) {
+    D.leaderboardBtn.onclick = window.openLeaderboard;
 }
 
 if (D.snapshotBtn) {
@@ -994,4 +1090,4 @@ if (D.shareBtn) {
 // Init
 updateCoinDisplay();
 initSystem();
-console.log("✓ v0.9.8 READY - Economy Active");
+console.log("✓ v0.9.9 READY - Mobile Optimized, Bug-Free");

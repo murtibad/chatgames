@@ -34,7 +34,7 @@
     <div id="vignette-overlay"></div>
 
     <!-- 2. GLOBAL HUD (Always Visible) -->
-    <button id="mute-btn"><i class="fa-solid fa-volume-high"></i></button>
+    <button id="mute-btn">🔊</button>
 
     <div id="score-hud" class="hidden">
         <span class="hud-label">SCORE</span>
@@ -51,22 +51,22 @@
             <p class="subtitle">Face Tracking Arcade</p>
 
             <div class="game-card">
-                <i class="fa-solid fa-face-grin-wide icon-lg"></i>
+                <div class="icon-lg">🎮</div>
                 <h3>Nose Hunter</h3>
                 <p>Catch points, avoid bombs!</p>
                 <button onclick="window.startGame()" class="btn-primary">PLAY NOW</button>
             </div>
 
             <div class="coin-display">
-                <i class="fa-solid fa-coins"></i> <span id="coin-count">0</span>
+                🪙 <span id="coin-count">0</span>
             </div>
 
             <button id="btn-leaderboard" class="btn-secondary">
-                <i class="fa-solid fa-trophy"></i> LEADERBOARD
+                🏆 LEADERBOARD
             </button>
-            
+
             <button id="btn-shop" class="btn-secondary">
-                <i class="fa-solid fa-shirt"></i> STYLE SHOP
+                👕 STYLE SHOP
             </button>
         </div>
 
@@ -83,11 +83,11 @@
             <div id="save-msg"></div>
 
             <div class="action-row">
-                <button id="btn-share" class="btn-secondary"><i class="fa-solid fa-share-nodes"></i> Share</button>
-                <button onclick="window.restartGame()" class="btn-secondary"><i class="fa-solid fa-rotate-right"></i>
+                <button id="btn-share" class="btn-secondary">🔗 Share</button>
+                <button onclick="window.restartGame()" class="btn-secondary">🔄
                     Restart</button>
             </div>
-            <button id="btn-snapshot" class="btn-secondary"><i class="fa-solid fa-camera"></i> Save Photo</button>
+            <button id="btn-snapshot" class="btn-secondary">📸 Save Photo</button>
             <button onclick="window.goHome()" class="btn-text">Back to Home</button>
         </div>
 
@@ -102,11 +102,11 @@
         <div id="shop-screen" class="glass-panel hidden">
             <h2>STYLE SHOP</h2>
             <p class="subtitle">Customize your nose cursor!</p>
-            
+
             <div id="shop-items" class="shop-grid">
                 <!-- Items populated by JS -->
             </div>
-            
+
             <button onclick="window.closeShop()" class="btn-secondary">CLOSE</button>
         </div>
 
