@@ -1,4 +1,4 @@
-/* v0.9.8 ECONOMY & STYLE - style.css */
+/* v1.0.1 UI & BALANCE FIXES - style.css */
 
 :root {
     --cyan: #00f2ea;
@@ -18,11 +18,12 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-/* 1. BASE & REALITY LAYER */
+/* 1. BASE & REALITY LAYER (MOBILE FIX: 100dvh) */
 body,
 html {
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
+    /* Dynamic viewport height for mobile */
     background: transparent !important;
     overflow: hidden;
     color: white;
@@ -59,7 +60,7 @@ body.fever-mode {
     top: 0;
     left: 0;
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
     object-fit: cover;
     transform: scaleX(-1);
     touch-action: none;
@@ -77,6 +78,8 @@ body.fever-mode {
 #vignette-overlay {
     position: fixed;
     inset: 0;
+    height: 100dvh;
+    /* Mobile fix */
     background: radial-gradient(circle, transparent 40%, rgba(0, 0, 0, 0.8) 100%);
     z-index: 1;
     pointer-events: none;
@@ -247,7 +250,7 @@ button:active {
 }
 
 /* 6. HUD ELEMENTS */
-#mute-btn {
+.hud-icon-btn {
     position: fixed;
     top: 20px;
     right: 20px;
@@ -258,9 +261,18 @@ button:active {
     backdrop-filter: blur(10px);
     border: 1px solid var(--border);
     color: white;
-    font-size: 1.2rem;
+    font-size: 1.4rem;
     z-index: 101;
-    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+.hud-icon-btn:hover {
+    background: rgba(0, 242, 234, 0.2);
+    border-color: var(--cyan);
+    box-shadow: 0 0 20px rgba(0, 242, 234, 0.3);
 }
 
 #score-hud {
@@ -289,7 +301,12 @@ body.fever-mode #score-hud {
 #score-val {
     color: var(--cyan);
     font-size: 1.4rem;
-    transition: color 0.3s;
+    transition: color 0.15s ease;
+}
+
+#score-val.score-flash {
+    color: #ffffff;
+    text-shadow: 0 0 15px #ffffff;
 }
 
 body.fever-mode #score-val {
@@ -302,7 +319,104 @@ body.fever-mode #score-val {
     letter-spacing: 1px;
 }
 
-/* 7. LEADERBOARD STYLES */
+/* 7. SETTINGS MODAL */
+.setting-item {
+    margin: 20px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.setting-item label {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.styled-slider {
+    width: 200px;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    outline: none;
+}
+
+.styled-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--cyan);
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(0, 242, 234, 0.6);
+    transition: all 0.2s;
+}
+
+.styled-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 20px rgba(0, 242, 234, 0.8);
+}
+
+.styled-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--cyan);
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(0, 242, 234, 0.6);
+    border: none;
+}
+
+/* TOGGLE SWITCH */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.2);
+    transition: 0.3s;
+    border-radius: 26px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+input:checked+.toggle-slider {
+    background-color: var(--cyan);
+    box-shadow: 0 0 15px rgba(0, 242, 234, 0.5);
+}
+
+input:checked+.toggle-slider:before {
+    transform: translateX(24px);
+}
+
+/* 8. LEADERBOARD STYLES */
 .leaderboard-list {
     max-height: 300px;
     overflow-y: auto;
@@ -347,7 +461,7 @@ body.fever-mode #score-val {
     color: var(--bronze);
 }
 
-/* 8. OVERLAYS & MODALS */
+/* 9. OVERLAYS & MODALS */
 .hidden {
     display: none !important;
 }
@@ -378,8 +492,8 @@ body.fever-mode #score-val {
     }
 }
 
-/* 9. INPUTS */
-input {
+/* 10. INPUTS */
+input[type="text"] {
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border);
     color: white;
@@ -393,7 +507,7 @@ input {
     outline: none;
 }
 
-input:focus {
+input[type="text"]:focus {
     border-color: var(--cyan);
 }
 
@@ -424,27 +538,7 @@ input:focus {
     color: var(--cyan);
 }
 
-/* 10. JUICY EFFECTS */
-@keyframes scorePulse {
-    0% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(1.3);
-        color: var(--cyan);
-        text-shadow: 0 0 20px var(--cyan);
-    }
-
-    100% {
-        transform: scale(1);
-    }
-}
-
-.score-pulse-anim {
-    animation: scorePulse 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
+/* 11. JUICY EFFECTS */
 @keyframes damageFlash {
     0% {
         box-shadow: inset 0 0 0 0 transparent;
@@ -544,7 +638,7 @@ input:focus {
     }
 }
 
-/* 11. ECONOMY SYSTEM */
+/* 12. ECONOMY SYSTEM */
 .coin-display {
     background: rgba(255, 215, 0, 0.1);
     border: 1px solid rgba(255, 215, 0, 0.3);
@@ -647,7 +741,7 @@ input:focus {
     border: 1px solid var(--cyan);
 }
 
-/* 12. RESPONSIVE */
+/* 13. RESPONSIVE */
 @media (max-width: 480px) {
     .title {
         font-size: 2.5rem;
@@ -663,5 +757,9 @@ input:focus {
 
     .shop-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .styled-slider {
+        width: 150px;
     }
 }

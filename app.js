@@ -1,8 +1,8 @@
-// v1.0.0 FINAL POLISH - app.js
+// v1.0.1 UI & BALANCE FIXES - app.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-console.log("🎯 v1.0.0 FINAL POLISH");
+console.log("⚙️ v1.0.1 UI & BALANCE FIXES");
 
 // === FIREBASE CONFIG ===
 const CONFIG = {
@@ -23,13 +23,18 @@ try {
     console.warn("Firebase Offline:", e);
 }
 
-// === VIRTUAL PLAY AREA (Desktop/Mobile Balance) ===
+// === VIRTUAL PLAY AREA ===
 const MAX_PLAY_WIDTH = 600;
 
 function getPlayArea() {
     const playWidth = Math.min(window.innerWidth, MAX_PLAY_WIDTH);
     const playXStart = (window.innerWidth - playWidth) / 2;
     return { playWidth, playXStart };
+}
+
+// === UTILITY: Clamp Function ===
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
 }
 
 // === localStorage ===
@@ -48,7 +53,7 @@ function loadPlayerData() {
         inventory: ['default'],
         equippedSkin: 'default',
         lastUsername: '',
-        volume: 1.0 // NEW: Volume setting
+        volume: 1.0
     };
 }
 
@@ -102,11 +107,11 @@ const SHOP_ITEMS = [
     }
 ];
 
-// === PRE-RENDERED SPRITES (GLOW FIX) ===
+// === PRE-RENDERED SPRITES ===
 const diamondSprite = document.createElement('canvas');
 const goldDiamondSprite = document.createElement('canvas');
 const bombSprite = document.createElement('canvas');
-const spriteSize = 128; // INCREASED from 64 to prevent glow cutoff
+const spriteSize = 128;
 
 function preRenderDiamond() {
     diamondSprite.width = spriteSize;
@@ -114,7 +119,7 @@ function preRenderDiamond() {
     const ctx = diamondSprite.getContext('2d');
     const cx = spriteSize / 2;
     const cy = spriteSize / 2;
-    const size = spriteSize / 5; // Smaller relative to canvas
+    const size = spriteSize / 5;
 
     ctx.shadowBlur = 20;
     ctx.shadowColor = "rgba(0, 255, 255, 0.8)";
@@ -225,6 +230,7 @@ const D = {
     gameOver: getEl('game-over-screen'),
     leaderboard: getEl('leaderboard-screen'),
     shop: getEl('shop-screen'),
+    settings: getEl('settings-modal'),
     scoreHud: getEl('score-hud'),
     scoreVal: getEl('score-val'),
     livesDisplay: getEl('lives-display'),
@@ -235,8 +241,9 @@ const D = {
     saveBtn: getEl('btn-save'),
     shareBtn: getEl('btn-share'),
     snapshotBtn: getEl('btn-snapshot'),
-    muteBtn: getEl('mute-btn'),
     volumeSlider: getEl('volume-slider'),
+    muteToggle: getEl('mute-toggle'),
+    settingsBtn: getEl('settings-btn'),
     list: getEl('leaderboard-list'),
     coinCount: getEl('coin-count'),
     shopItems: getEl('shop-items'),
@@ -255,6 +262,7 @@ const State = {
     bombChance: 0.35,
     lastSpawnTime: 0,
     spawnInterval: 1200,
+    gameStartTime: 0, // NEW: For progressive difficulty
     fallingObjects: [],
     particles: [],
     floatingTexts: [],
@@ -265,7 +273,7 @@ const State = {
     muted: false,
     volume: PlayerData.volume,
     noseStyle: PlayerData.equippedSkin,
-    nosePulse: 0 // NEW: For breathing animation
+    nosePulse: 0
 };
 
 // === CLASSES ===
@@ -303,16 +311,17 @@ class FallingObject {
     constructor(w, h, type, speedMult, spawnWidthRatio) {
         this.type = type;
 
-        // BALANCED: Use virtual play area
         const { playWidth, playXStart } = getPlayArea();
-        this.radius = Math.max(20, playWidth * 0.12); // 12% of PLAY area
+        this.radius = Math.max(20, playWidth * 0.12);
 
         const range = playWidth * spawnWidthRatio;
         const minX = playXStart + (playWidth - range) / 2;
         this.x = minX + Math.random() * range;
 
         this.y = -this.radius * 2;
-        const baseSpeed = h * 0.008;
+
+        // PROGRESSIVE DIFFICULTY: Reduced base speed
+        const baseSpeed = h * 0.004; // HALVED from 0.008
         this.speed = (Math.random() * baseSpeed + baseSpeed) * speedMult;
 
         this.color = type === 'gem' ? '#00f2ea' : (type === 'gold' ? '#FFD700' : '#ff0050');
@@ -337,7 +346,7 @@ class FallingObject {
     }
 }
 
-// === AUDIO ENGINE ===
+// === AUDIO ENGINE (WITH FIXES) ===
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = new AudioCtx();
 let masterGain;
@@ -346,8 +355,29 @@ function initAudio() {
     if (!masterGain) {
         masterGain = audioCtx.createGain();
         masterGain.connect(audioCtx.destination);
+        setVolume(State.volume);
+    }
+}
+
+// AUDIO FIX: Proper validation and clamping
+function setVolume(value) {
+    const parsedValue = parseFloat(value);
+
+    // Handle NaN or Infinite
+    if (isNaN(parsedValue) || !isFinite(parsedValue)) {
+        State.volume = 0.5;
+        PlayerData.volume = 0.5;
+    } else {
+        // Clamp between 0 and 1
+        State.volume = clamp(parsedValue, 0, 1);
+        PlayerData.volume = State.volume;
+    }
+
+    if (masterGain) {
         masterGain.gain.value = State.volume;
     }
+
+    savePlayerData(PlayerData);
 }
 
 function playGemSound() {
@@ -454,7 +484,6 @@ function updateCoinDisplay() {
 
 function triggerVisualEffect(type) {
     if (type === 'score') {
-        // COLOR FLASH instead of bounce
         const scoreEl = D.scoreVal;
         if (scoreEl) {
             scoreEl.classList.remove('score-flash');
@@ -495,6 +524,15 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 3000);
 }
 
+// === SETTINGS MODAL ===
+window.openSettings = function () {
+    if (D.settings) D.settings.classList.remove('hidden');
+};
+
+window.closeSettings = function () {
+    if (D.settings) D.settings.classList.add('hidden');
+};
+
 // === SHOP SYSTEM ===
 function renderShop() {
     if (!D.shopItems) return;
@@ -519,12 +557,10 @@ function renderShop() {
         previewCanvas.height = 40;
         const ctx = previewCanvas.getContext('2d');
 
-        // ENHANCED 3D VISUALS
         if (item.type === 'circle') {
             const radius = item.id === 'clown' ? 18 : 15;
 
             if (item.id === 'clown') {
-                // 3D CLOWN with highlight
                 const grad = ctx.createRadialGradient(15, 15, 0, 20, 20, radius);
                 grad.addColorStop(0, '#FF9999');
                 grad.addColorStop(0.4, item.color);
@@ -536,7 +572,6 @@ function renderShop() {
                 ctx.arc(20, 20, radius, 0, Math.PI * 2);
                 ctx.fill();
 
-                // White highlight
                 ctx.fillStyle = 'rgba(255,255,255,0.4)';
                 ctx.beginPath();
                 ctx.arc(15, 15, 5, 0, Math.PI * 2);
@@ -561,7 +596,6 @@ function renderShop() {
                 ctx.fill();
             }
         } else {
-            // CYBORG with dashed lines
             ctx.strokeStyle = item.color;
             ctx.lineWidth = 3;
             ctx.shadowBlur = 10;
@@ -658,7 +692,11 @@ window.startGame = function () {
     D.gameOver.classList.add('hidden');
     if (D.leaderboard) D.leaderboard.classList.add('hidden');
     if (D.shop) D.shop.classList.add('hidden');
+    if (D.settings) D.settings.classList.add('hidden');
     D.scoreHud.classList.remove('hidden');
+
+    // HIDE SETTINGS BUTTON during game
+    if (D.settingsBtn) D.settingsBtn.classList.add('hidden');
 
     State.score = 0;
     State.lives = 3;
@@ -670,6 +708,7 @@ window.startGame = function () {
     State.particles = [];
     State.isGameActive = false;
     State.nosePulse = 0;
+    State.gameStartTime = 0; // Will be set when game actually starts
 
     document.body.classList.remove('fever-mode');
 
@@ -680,6 +719,7 @@ window.startGame = function () {
         if (!State.isGameActive && D.overlay.style.display !== 'none') {
             D.overlay.style.display = 'none';
             State.isGameActive = true;
+            State.gameStartTime = performance.now(); // START TIMER
             State.lastSpawnTime = performance.now();
             requestAnimationFrame(gameLoop);
         }
@@ -705,6 +745,7 @@ function showCountdown() {
             clearInterval(timer);
             D.overlay.style.display = 'none';
             State.isGameActive = true;
+            State.gameStartTime = performance.now();
             State.lastSpawnTime = performance.now();
             requestAnimationFrame(gameLoop);
         }
@@ -716,6 +757,9 @@ function endGame() {
     D.scoreHud.classList.add('hidden');
     D.gameOver.classList.remove('hidden');
     document.body.classList.remove('fever-mode');
+
+    // SHOW SETTINGS BUTTON again
+    if (D.settingsBtn) D.settingsBtn.classList.remove('hidden');
 
     PlayerData.totalCoins += State.score;
     savePlayerData(PlayerData);
@@ -743,11 +787,9 @@ function gameLoop() {
     const noseXPx = State.lastKnownNose.x;
     const noseYPx = State.lastKnownNose.y;
 
-    // NOSE PULSE ANIMATION
     State.nosePulse += 0.05;
-    const pulseScale = 1 + Math.sin(State.nosePulse) * 0.05; // 0.95 to 1.05
+    const pulseScale = 1 + Math.sin(State.nosePulse) * 0.05;
 
-    // ENHANCED NOSE RENDERING
     ctx.save();
 
     const skinData = SHOP_ITEMS.find(s => s.id === State.noseStyle) || SHOP_ITEMS[0];
@@ -762,7 +804,6 @@ function gameLoop() {
 
         if (skinData.id === 'clown') {
             radius = 18;
-            // 3D GRADIENT with highlight
             const grad = ctx.createRadialGradient(noseXPx - 5, noseYPx - 5, 0, noseXPx, noseYPx, radius);
             grad.addColorStop(0, '#FF9999');
             grad.addColorStop(0.4, skinData.color);
@@ -774,7 +815,6 @@ function gameLoop() {
             ctx.arc(noseXPx, noseYPx, radius, 0, 2 * Math.PI);
             ctx.fill();
 
-            // White highlight
             ctx.shadowBlur = 0;
             ctx.fillStyle = 'rgba(255,255,255,0.5)';
             ctx.beginPath();
@@ -811,7 +851,6 @@ function gameLoop() {
             ctx.stroke();
         }
     } else {
-        // CYBORG: Rotating HUD
         const rotation = (State.nosePulse * 2) % (Math.PI * 2);
 
         ctx.translate(noseXPx, noseYPx);
@@ -842,8 +881,12 @@ function gameLoop() {
 
     ctx.restore();
 
-    const speedLevel = 1.0 + Math.floor(State.score / 50) * 0.1;
-    State.speedMultiplier = speedLevel;
+    // PROGRESSIVE DIFFICULTY
+    const now = performance.now();
+    const minutesPlayed = (now - State.gameStartTime) / 60000;
+    const dynamicSpeedBonus = 1.0 + (minutesPlayed * 0.5) + (State.score * 0.002);
+
+    State.speedMultiplier = dynamicSpeedBonus;
 
     if (State.score >= 100) {
         State.bombChance = 0.45;
@@ -853,8 +896,7 @@ function gameLoop() {
     if (safeWidthRatio < 0.4) safeWidthRatio = 0.4;
     if (safeWidthRatio > 0.95) safeWidthRatio = 0.95;
 
-    const currentInterval = State.spawnInterval / speedLevel;
-    const now = performance.now();
+    const currentInterval = State.spawnInterval / State.speedMultiplier;
 
     if (now - State.lastSpawnTime > currentInterval) {
         let type = 'gem';
@@ -1083,29 +1125,32 @@ window.goHome = () => {
     D.gameOver.classList.add('hidden');
     if (D.leaderboard) D.leaderboard.classList.add('hidden');
     if (D.shop) D.shop.classList.add('hidden');
+    if (D.settings) D.settings.classList.add('hidden');
     D.menu.classList.remove('hidden');
     document.body.classList.remove('fever-mode');
+
+    // SHOW SETTINGS BUTTON
+    if (D.settingsBtn) D.settingsBtn.classList.remove('hidden');
 };
 
-if (D.muteBtn) {
-    D.muteBtn.onclick = () => {
-        State.muted = !State.muted;
-        D.muteBtn.style.opacity = State.muted ? 0.5 : 1.0;
-        D.muteBtn.innerText = State.muted ? '🔇' : '🔊';
-    };
+// SETTINGS BUTTON
+if (D.settingsBtn) {
+    D.settingsBtn.onclick = window.openSettings;
 }
 
 // VOLUME SLIDER
 if (D.volumeSlider) {
     D.volumeSlider.value = State.volume * 100;
     D.volumeSlider.oninput = (e) => {
-        State.volume = e.target.value / 100;
-        PlayerData.volume = State.volume;
-        savePlayerData(PlayerData);
+        setVolume(e.target.value / 100);
+    };
+}
 
-        if (masterGain) {
-            masterGain.gain.value = State.volume;
-        }
+// MUTE TOGGLE
+if (D.muteToggle) {
+    D.muteToggle.checked = !State.muted;
+    D.muteToggle.onchange = (e) => {
+        State.muted = !e.target.checked;
     };
 }
 
@@ -1181,4 +1226,4 @@ if (D.shareBtn) {
 // Init
 updateCoinDisplay();
 initSystem();
-console.log("✓ v1.0.0 READY - Final Polish Complete");
+console.log("✓ v1.0.1 READY - UI Polished, Balance Fixed");
