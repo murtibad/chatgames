@@ -1,8 +1,8 @@
-// v0.9.7 FUN & REWARDING - app.js
+// v0.9.8 ECONOMY & STYLE - app.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-console.log("💎 v0.9.7 FUN & REWARDING INITIALIZED");
+console.log("💰 v0.9.8 ECONOMY & STYLE INITIALIZED");
 
 // === FIREBASE CONFIG ===
 const CONFIG = {
@@ -23,9 +23,76 @@ try {
     console.warn("Firebase Offline:", e);
 }
 
+// === localStorage PERSISTENCE ===
+const STORAGE_KEY = 'chatgames_data';
+
+function loadPlayerData() {
+    try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        if (data) {
+            return JSON.parse(data);
+        }
+    } catch (e) {
+        console.warn("localStorage load error:", e);
+    }
+
+    return {
+        totalCoins: 0,
+        inventory: ['default'],
+        equippedSkin: 'default',
+        lastUsername: ''
+    };
+}
+
+function savePlayerData(data) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.error("localStorage save error:", e);
+    }
+}
+
+const PlayerData = loadPlayerData();
+
+// === SHOP ITEMS ===
+const SHOP_ITEMS = [
+    {
+        id: 'default',
+        name: 'Neon Dot',
+        price: 0,
+        color: '#00f2ea',
+        type: 'circle',
+        description: 'Classic cyan glow'
+    },
+    {
+        id: 'clown',
+        name: 'Clown Nose',
+        price: 500,
+        color: '#ff0050',
+        type: 'circle',
+        description: 'Red & playful'
+    },
+    {
+        id: 'cyborg',
+        name: 'Cyborg',
+        price: 1000,
+        color: '#00ff00',
+        type: 'square',
+        description: 'Tech square frame'
+    },
+    {
+        id: 'gold',
+        name: 'Golden Touch',
+        price: 2000,
+        color: '#FFD700',
+        type: 'circle',
+        description: 'Premium sparkle'
+    }
+];
+
 // === PRE-RENDERED SPRITES ===
 const diamondSprite = document.createElement('canvas');
-const goldDiamondSprite = document.createElement('canvas'); // NEW
+const goldDiamondSprite = document.createElement('canvas');
 const bombSprite = document.createElement('canvas');
 const spriteSize = 64;
 
@@ -69,7 +136,6 @@ function preRenderGoldDiamond() {
     const cy = spriteSize / 2;
     const size = spriteSize / 2.5;
 
-    // ENHANCED GLOW
     ctx.shadowBlur = 25;
     ctx.shadowColor = "rgba(255, 215, 0, 1.0)";
 
@@ -80,11 +146,10 @@ function preRenderGoldDiamond() {
     ctx.lineTo(cx - size, cy);
     ctx.closePath();
 
-    // GOLD GRADIENT
     const gradient = ctx.createRadialGradient(cx, cy - 5, 0, cx, cy, size);
-    gradient.addColorStop(0, "#FFF4A3"); // Bright center
-    gradient.addColorStop(0.5, "#FFD700"); // Gold
-    gradient.addColorStop(1, "#B8860B"); // Dark gold
+    gradient.addColorStop(0, "#FFF4A3");
+    gradient.addColorStop(0.5, "#FFD700");
+    gradient.addColorStop(1, "#B8860B");
 
     ctx.fillStyle = gradient;
     ctx.fill();
@@ -147,6 +212,7 @@ const D = {
     menu: getEl('menu-screen'),
     gameOver: getEl('game-over-screen'),
     leaderboard: getEl('leaderboard-screen'),
+    shop: getEl('shop-screen'),
     scoreHud: getEl('score-hud'),
     scoreVal: getEl('score-val'),
     livesDisplay: getEl('lives-display'),
@@ -156,8 +222,12 @@ const D = {
     saveMsg: getEl('save-msg'),
     saveBtn: getEl('btn-save'),
     shareBtn: getEl('btn-share'),
+    snapshotBtn: getEl('btn-snapshot'),
     muteBtn: getEl('mute-btn'),
-    list: getEl('leaderboard-list')
+    list: getEl('leaderboard-list'),
+    coinCount: getEl('coin-count'),
+    shopItems: getEl('shop-items'),
+    shopBtn: getEl('btn-shop')
 };
 
 // === GAME STATE ===
@@ -166,7 +236,7 @@ const State = {
     score: 0,
     lives: 3,
     combo: 0,
-    isFeverMode: false, // NEW
+    isFeverMode: false,
     speedMultiplier: 1.0,
     bombChance: 0.35,
     lastSpawnTime: 0,
@@ -178,7 +248,8 @@ const State = {
     noseY: 0.5,
     faceScale: 0.1,
     lastKnownNose: { x: 0, y: 0 },
-    muted: false
+    muted: false,
+    noseStyle: PlayerData.equippedSkin // NEW
 };
 
 // === CLASSES ===
@@ -214,7 +285,7 @@ class Particle {
 
 class FallingObject {
     constructor(w, h, type, speedMult, spawnWidthRatio) {
-        this.type = type; // 'gem', 'gold', 'bomb'
+        this.type = type;
         this.radius = 30;
 
         const range = w * spawnWidthRatio;
@@ -246,7 +317,7 @@ class FallingObject {
     }
 }
 
-// === ENHANCED AUDIO ENGINE (SYNTHWAVE) ===
+// === AUDIO ENGINE ===
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = new AudioCtx();
 
@@ -294,7 +365,6 @@ function playGoldSound() {
     if (State.muted) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
-    // Major chord: C-E-G
     const notes = [523.25, 659.25, 783.99];
 
     notes.forEach((freq, i) => {
@@ -342,6 +412,12 @@ function updateUI() {
             D.livesDisplay.innerHTML += i < State.lives ? '❤️' : '🖤';
         }
     }
+
+    updateCoinDisplay();
+}
+
+function updateCoinDisplay() {
+    if (D.coinCount) D.coinCount.innerText = PlayerData.totalCoins;
 }
 
 function triggerVisualEffect(type) {
@@ -385,11 +461,118 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 3000);
 }
 
+// === SHOP SYSTEM ===
+function renderShop() {
+    if (!D.shopItems) return;
+
+    D.shopItems.innerHTML = '';
+
+    SHOP_ITEMS.forEach(item => {
+        const owned = PlayerData.inventory.includes(item.id);
+        const equipped = PlayerData.equippedSkin === item.id;
+
+        const div = document.createElement('div');
+        div.className = 'shop-item';
+        if (owned) div.classList.add('owned');
+        if (equipped) div.classList.add('equipped');
+
+        const preview = document.createElement('div');
+        preview.className = 'shop-item-preview';
+        preview.style.border = `2px solid ${item.color}`;
+
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.width = 40;
+        previewCanvas.height = 40;
+        const ctx = previewCanvas.getContext('2d');
+
+        if (item.type === 'circle') {
+            ctx.beginPath();
+            ctx.arc(20, 20, 15, 0, Math.PI * 2);
+            ctx.fillStyle = item.color;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = item.color;
+            ctx.fill();
+        } else {
+            ctx.strokeStyle = item.color;
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = item.color;
+            ctx.strokeRect(7, 7, 26, 26);
+        }
+
+        preview.appendChild(previewCanvas);
+
+        const name = document.createElement('div');
+        name.className = 'shop-item-name';
+        name.innerText = item.name;
+
+        const price = document.createElement('div');
+        price.className = 'shop-item-price';
+        price.innerText = item.price === 0 ? 'FREE' : `${item.price} 🪙`;
+
+        const btn = document.createElement('button');
+        btn.className = 'shop-item-btn';
+
+        if (equipped) {
+            btn.innerText = 'EQUIPPED';
+            btn.classList.add('equipped-btn');
+            btn.disabled = true;
+        } else if (owned) {
+            btn.innerText = 'EQUIP';
+            btn.onclick = () => equipSkin(item.id);
+        } else {
+            btn.innerText = 'BUY';
+            btn.disabled = PlayerData.totalCoins < item.price;
+            btn.onclick = () => buySkin(item.id, item.price);
+        }
+
+        div.appendChild(preview);
+        div.appendChild(name);
+        div.appendChild(price);
+        div.appendChild(btn);
+
+        D.shopItems.appendChild(div);
+    });
+}
+
+function buySkin(id, price) {
+    if (PlayerData.totalCoins >= price) {
+        PlayerData.totalCoins -= price;
+        PlayerData.inventory.push(id);
+        savePlayerData(PlayerData);
+        updateCoinDisplay();
+        renderShop();
+        showToast(`Purchased! 🎉`);
+        playGoldSound();
+    }
+}
+
+function equipSkin(id) {
+    PlayerData.equippedSkin = id;
+    State.noseStyle = id;
+    savePlayerData(PlayerData);
+    renderShop();
+    showToast(`Equipped! ✨`);
+    playGemSound();
+}
+
+window.openShop = function () {
+    D.menu.classList.add('hidden');
+    D.shop.classList.remove('hidden');
+    renderShop();
+};
+
+window.closeShop = function () {
+    D.shop.classList.add('hidden');
+    D.menu.classList.remove('hidden');
+};
+
 // === FLOW CONTROL ===
 window.startGame = function () {
     D.menu.classList.add('hidden');
     D.gameOver.classList.add('hidden');
     if (D.leaderboard) D.leaderboard.classList.add('hidden');
+    if (D.shop) D.shop.classList.add('hidden');
     D.scoreHud.classList.remove('hidden');
 
     State.score = 0;
@@ -409,7 +592,6 @@ window.startGame = function () {
 
     setTimeout(() => {
         if (!State.isGameActive && D.overlay.style.display !== 'none') {
-            console.warn("Watchdog: Forced Start");
             D.overlay.style.display = 'none';
             State.isGameActive = true;
             State.lastSpawnTime = performance.now();
@@ -449,12 +631,19 @@ function endGame() {
     D.gameOver.classList.remove('hidden');
     document.body.classList.remove('fever-mode');
 
+    // ECONOMY: Add score to coins
+    PlayerData.totalCoins += State.score;
+    savePlayerData(PlayerData);
+    updateCoinDisplay();
+
     const finalScoreEl = document.getElementById('final-score');
     if (finalScoreEl) finalScoreEl.innerText = State.score;
 
     if (D.saveBtn) D.saveBtn.disabled = false;
     if (D.saveMsg) D.saveMsg.innerText = "";
-    if (D.username) D.username.value = "";
+    if (D.username) {
+        D.username.value = PlayerData.lastUsername || "";
+    }
 
     playBombSound();
 }
@@ -469,17 +658,34 @@ function gameLoop() {
     const noseXPx = State.lastKnownNose.x;
     const noseYPx = State.lastKnownNose.y;
 
+    // DYNAMIC NOSE RENDERING
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(noseXPx, noseYPx, 10, 0, 2 * Math.PI);
-    ctx.fillStyle = "rgba(0, 255, 255, 0.8)";
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = "#00f2ea";
-    ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+
+    const skinData = SHOP_ITEMS.find(s => s.id === State.noseStyle) || SHOP_ITEMS[0];
+
+    if (skinData.type === 'circle') {
+        const radius = skinData.id === 'clown' ? 15 : 10;
+        const blur = skinData.id === 'gold' ? 20 : 15;
+
+        ctx.beginPath();
+        ctx.arc(noseXPx, noseYPx, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = skinData.color;
+        ctx.shadowBlur = blur;
+        ctx.shadowColor = skinData.color;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    } else {
+        // Square (cyborg)
+        ctx.strokeStyle = skinData.color;
+        ctx.lineWidth = 3; ctx.shadowBlur = 15;
+        ctx.shadowColor = skinData.color;
+        ctx.strokeRect(noseXPx - 12, noseYPx - 12, 24, 24);
+    }
+
     ctx.restore();
 
     const speedLevel = 1.0 + Math.floor(State.score / 50) * 0.1;
@@ -500,7 +706,6 @@ function gameLoop() {
         let type = 'gem';
         const rand = Math.random();
 
-        // 5% gold, 30% bomb, 65% gem
         if (rand < 0.05) {
             type = 'gold';
         } else if (rand < 0.35) {
@@ -687,12 +892,28 @@ window.closeLeaderboard = function () {
     D.menu.classList.remove('hidden');
 };
 
+// === SNAPSHOT FEATURE ===
+function saveSnapshot() {
+    try {
+        const dataURL = D.canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = `chatgames_${Date.now()}.png`;
+        link.href = dataURL;
+        link.click();
+        showToast("Photo saved! 📸");
+    } catch (e) {
+        console.error("Snapshot error:", e);
+        showToast("Error saving photo");
+    }
+}
+
 // === BINDINGS ===
 window.restartGame = window.startGame;
 
 window.goHome = () => {
     D.gameOver.classList.add('hidden');
     if (D.leaderboard) D.leaderboard.classList.add('hidden');
+    if (D.shop) D.shop.classList.add('hidden');
     D.menu.classList.remove('hidden');
     document.body.classList.remove('fever-mode');
 };
@@ -705,6 +926,14 @@ if (D.muteBtn) {
     };
 }
 
+if (D.shopBtn) {
+    D.shopBtn.onclick = window.openShop;
+}
+
+if (D.snapshotBtn) {
+    D.snapshotBtn.onclick = saveSnapshot;
+}
+
 if (D.saveBtn) {
     D.saveBtn.onclick = async () => {
         if (!db) {
@@ -713,6 +942,9 @@ if (D.saveBtn) {
         }
 
         const name = D.username.value.trim() || 'Anonymous';
+        PlayerData.lastUsername = name;
+        savePlayerData(PlayerData);
+
         D.saveBtn.innerText = "SAVING...";
         D.saveBtn.disabled = true;
 
@@ -745,7 +977,6 @@ if (D.shareBtn) {
         if (navigator.share) {
             try {
                 await navigator.share(shareData);
-                console.log('Shared successfully');
             } catch (err) {
                 console.log('Share cancelled');
             }
@@ -760,5 +991,7 @@ if (D.shareBtn) {
     };
 }
 
+// Init
+updateCoinDisplay();
 initSystem();
-console.log("✓ v0.9.7 READY");
+console.log("✓ v0.9.8 READY - Economy Active");

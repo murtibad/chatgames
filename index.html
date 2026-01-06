@@ -57,8 +57,16 @@
                 <button onclick="window.startGame()" class="btn-primary">PLAY NOW</button>
             </div>
 
+            <div class="coin-display">
+                <i class="fa-solid fa-coins"></i> <span id="coin-count">0</span>
+            </div>
+
             <button id="btn-leaderboard" class="btn-secondary">
                 <i class="fa-solid fa-trophy"></i> LEADERBOARD
+            </button>
+            
+            <button id="btn-shop" class="btn-secondary">
+                <i class="fa-solid fa-shirt"></i> STYLE SHOP
             </button>
         </div>
 
@@ -79,6 +87,7 @@
                 <button onclick="window.restartGame()" class="btn-secondary"><i class="fa-solid fa-rotate-right"></i>
                     Restart</button>
             </div>
+            <button id="btn-snapshot" class="btn-secondary"><i class="fa-solid fa-camera"></i> Save Photo</button>
             <button onclick="window.goHome()" class="btn-text">Back to Home</button>
         </div>
 
@@ -87,6 +96,18 @@
             <h2>TOP PLAYERS</h2>
             <div id="leaderboard-list">Loading...</div>
             <button onclick="window.closeLeaderboard()" class="btn-secondary">CLOSE</button>
+        </div>
+
+        <!-- STYLE SHOP SCREEN -->
+        <div id="shop-screen" class="glass-panel hidden">
+            <h2>STYLE SHOP</h2>
+            <p class="subtitle">Customize your nose cursor!</p>
+            
+            <div id="shop-items" class="shop-grid">
+                <!-- Items populated by JS -->
+            </div>
+            
+            <button onclick="window.closeShop()" class="btn-secondary">CLOSE</button>
         </div>
 
     </div>
