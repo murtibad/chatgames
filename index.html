@@ -133,10 +133,23 @@
     </div>
 
     <!-- 4. SYSTEM OVERLAYS -->
+
+    <!-- DISTANCE CHECK OVERLAY (Smart Start) -->
+    <div id="distance-check-overlay" class="hidden">
+        <div class="distance-frame"></div>
+        <div id="distance-message">Checking distance...</div>
+    </div>
+
+    <!-- PROXIMITY WARNING (In-Game) -->
+    <div id="proximity-warning" class="hidden">
+        <i class="fa-solid fa-triangle-exclamation"></i> Maintain Distance!
+    </div>
+
+    <!-- COUNTDOWN OVERLAY -->
     <div id="countdown-overlay" class="hidden">
         <div id="countdown-text">3</div>
-
-        <script type="module" src="app.js"></script>
+    </div>
+    <script type="module" src="app.js"></script>
 </body>
 
 </html>
