@@ -1,8 +1,8 @@
-// v1.1.1 CRITICAL FIXES & POLISH - app.js
+// v1.1.2 ULTRA-COMPREHENSIVE FIXES - app.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-console.log("🔧 v1.1.1 CRITICAL FIXES & POLISH");
+console.log("🚀 v1.1.2 ULTRA-COMPREHENSIVE FIXES");
 
 // === FIREBASE CONFIG ===
 const CONFIG = {
@@ -23,14 +23,122 @@ try {
     console.warn("Firebase Offline:", e);
 }
 
-// === PROXIMITY THRESHOLDS ===
+// === AUDIO SYSTEM ===
+const AudioManager = {
+    ctx: null,
+    masterGain: null,
+    muted: false,
+    volume: 1.0,
+
+    init() {
+        try {
+            if (!this.ctx) {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioCtx();
+            }
+            if (this.ctx.state === 'suspended') this.ctx.resume();
+            if (!this.masterGain) {
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.connect(this.ctx.destination);
+                this.masterGain.gain.value = this.volume;
+            }
+        } catch (e) {
+            console.warn("AudioManager init failed:", e);
+        }
+    },
+
+    setVolume(value) {
+        this.volume = clamp(parseFloat(value) || 0.5, 0, 1);
+        if (this.masterGain) this.masterGain.gain.value = this.volume;
+    },
+
+    playTone(freq, duration, type = 'sine') {
+        if (!this.ctx || this.muted) return;
+        try {
+            this.init();
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+            gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(this.masterGain);
+            osc.start();
+            osc.stop(this.ctx.currentTime + duration);
+        } catch (e) {
+            console.warn("playTone error:", e);
+        }
+    },
+
+    playGem() {
+        if (!this.ctx || this.muted) return;
+        try {
+            this.init();
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, this.ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1600, this.ctx.currentTime + 0.05);
+            gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+            osc.connect(gain);
+            gain.connect(this.masterGain);
+            osc.start();
+            osc.stop(this.ctx.currentTime + 0.2);
+        } catch (e) { }
+    },
+
+    playBomb() {
+        if (!this.ctx || this.muted) return;
+        try {
+            this.init();
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.2);
+            gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+            osc.connect(gain);
+            gain.connect(this.masterGain);
+            osc.start();
+            osc.stop(this.ctx.currentTime + 0.35);
+        } catch (e) { }
+    },
+
+    playGold() {
+        if (!this.ctx || this.muted) return;
+        try {
+            this.init();
+            const notes = [523.25, 659.25, 783.99];
+            notes.forEach((freq, i) => {
+                setTimeout(() => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.35);
+                }, i * 50);
+            });
+        } catch (e) { }
+    }
+};
+
+// === CONSTANTS ===
 const DISTANCE = {
     TOO_FAR: 0.15,
     TOO_CLOSE: 0.45,
-    HOLD_DURATION: 1500 // milliseconds
+    TOO_HIGH: 0.3,
+    TOO_LOW: 0.7,
+    HOLD_DURATION: 1500
 };
 
-// === VIRTUAL PLAY AREA ===
 const MAX_PLAY_WIDTH = 600;
 
 function getPlayArea() {
@@ -43,7 +151,7 @@ function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
 
-// === localStorage ===
+// === LOCALSTORAGE ===
 const STORAGE_KEY = 'chatgames_data';
 
 function loadPlayerData() {
@@ -72,12 +180,48 @@ function savePlayerData(data) {
 
 const PlayerData = loadPlayerData();
 
-// === SHOP ITEMS ===
+// === SHOP ITEMS (WITH SPECIAL ABILITIES) ===
 const SHOP_ITEMS = [
-    { id: 'default', name: 'Neon Dot', price: 0, color: '#00f2ea', type: 'circle', hitboxMultiplier: 1.0, description: 'Classic cyan glow' },
-    { id: 'clown', name: 'Clown Nose', price: 500, color: '#ff0050', type: 'circle', hitboxMultiplier: 1.5, description: 'Red & bigger reach' },
-    { id: 'cyborg', name: 'Cyborg', price: 1000, color: '#00ff00', type: 'square', hitboxMultiplier: 2.0, description: 'Tech precision' },
-    { id: 'gold', name: 'Golden Touch', price: 2000, color: '#FFD700', type: 'circle', hitboxMultiplier: 2.5, description: 'Premium magnet' }
+    {
+        id: 'default',
+        name: 'Neon Dot',
+        price: 0,
+        color: '#00f2ea',
+        type: 'circle',
+        hitboxMultiplier: 1.0,
+        ability: null,
+        description: 'Classic cyan glow'
+    },
+    {
+        id: 'clown',
+        name: 'Clown Nose',
+        price: 500,
+        color: '#ff0050',
+        type: 'circle',
+        hitboxMultiplier: 1.3, // Reduced from 1.5
+        ability: 'shield', // 10% chance to destroy bomb
+        description: '10% bomb shield'
+    },
+    {
+        id: 'cyborg',
+        name: 'Cyborg',
+        price: 1000,
+        color: '#00ff00',
+        type: 'square',
+        hitboxMultiplier: 1.6, // Reduced from 2.0
+        ability: null,
+        description: 'Tech precision'
+    },
+    {
+        id: 'gold',
+        name: 'Golden Touch',
+        price: 2000,
+        color: '#FFD700',
+        type: 'circle',
+        hitboxMultiplier: 2.0, // Reduced from 2.5
+        ability: 'multiplier', // 1.2x score
+        description: '1.2x score boost'
+    }
 ];
 
 // === PRE-RENDERED SPRITES ===
@@ -183,11 +327,14 @@ const D = {
 // === GAME STATE ===
 const State = {
     isGameActive: false,
+    isCountingDown: false, // NEW: Prevent duplicate countdowns
+    countdownTimer: null, // NEW: Track countdown interval
     score: 0,
     lives: 3,
     combo: 0,
     isFeverMode: false,
     speedMultiplier: 1.0,
+    lastSpeedNotification: 0, // NEW: Track speed up notifications
     bombChance: 0.35,
     lastSpawnTime: 0,
     spawnInterval: 1200,
@@ -199,21 +346,30 @@ const State = {
     noseY: 0.5,
     faceScale: 0.1,
     lastKnownNose: { x: 0, y: 0 },
-    muted: false,
-    volume: PlayerData.volume,
     noseStyle: PlayerData.equippedSkin,
     nosePulse: 0,
     waitingForIdealDistance: false,
     isDistanceIdeal: false,
-    distanceHoldTime: 0, // NEW: Hold timer
-    lastDistanceCheckTime: 0 // NEW: For delta time calculation
+    distanceHoldTime: 0,
+    lastDistanceCheckTime: 0,
+    scoreSaved: false // NEW: Prevent duplicate saves
 };
 
+// Sync audio state
+AudioManager.muted = false;
+AudioManager.volume = PlayerData.volume;
+
 // === PROXIMITY SYSTEM ===
-function checkDistance(faceWidth) {
+function checkDistance(faceWidth, noseY) {
+    // Check vertical position
+    if (noseY < DISTANCE.TOO_HIGH) return 'TOO_HIGH';
+    if (noseY > DISTANCE.TOO_LOW) return 'TOO_LOW';
+
+    // Check horizontal distance
     if (faceWidth < DISTANCE.TOO_FAR) return 'TOO_FAR';
-    else if (faceWidth > DISTANCE.TOO_CLOSE) return 'TOO_CLOSE';
-    else return 'IDEAL';
+    if (faceWidth > DISTANCE.TOO_CLOSE) return 'TOO_CLOSE';
+
+    return 'IDEAL';
 }
 
 function updateDistanceUI(status) {
@@ -227,24 +383,27 @@ function updateDistanceUI(status) {
         D.distanceMessage.innerText = '✓ Perfect Distance';
         D.distanceMessage.style.color = '#00f2ea';
         State.isDistanceIdeal = true;
-    } else if (status === 'TOO_FAR') {
-        frame.classList.remove('ideal');
-        frame.classList.add('warning');
-        D.distanceMessage.innerText = '🔭 Move Closer';
-        D.distanceMessage.style.color = '#ff0050';
-        State.isDistanceIdeal = false;
     } else {
         frame.classList.remove('ideal');
         frame.classList.add('warning');
-        D.distanceMessage.innerText = '✋ Move Back';
-        D.distanceMessage.style.color = '#ff0050';
         State.isDistanceIdeal = false;
+
+        if (status === 'TOO_FAR') {
+            D.distanceMessage.innerText = '🔭 Move Closer';
+        } else if (status === 'TOO_CLOSE') {
+            D.distanceMessage.innerText = '✋ Move Back';
+        } else if (status === 'TOO_HIGH') {
+            D.distanceMessage.innerText = '🔽 Move Down';
+        } else if (status === 'TOO_LOW') {
+            D.distanceMessage.innerText = '🔼 Move Up';
+        }
+        D.distanceMessage.style.color = '#ff0050';
     }
 }
 
 function updateHoldProgress(progress) {
     if (!D.progressRing) return;
-    const circumference = 283; // 2 * π * 45
+    const circumference = 283;
     const offset = circumference - (progress * circumference);
     D.progressRing.style.strokeDashoffset = offset;
 }
@@ -265,7 +424,12 @@ class Particle {
         this.life = 1.0;
         this.decay = Math.random() * 0.05 + 0.02;
     }
-    update() { this.x += this.speedX; this.y += this.speedY; this.life -= this.decay; this.size *= 0.95; }
+    update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        this.life -= this.decay;
+        this.size *= 0.95;
+    }
     draw(ctx) {
         ctx.save();
         ctx.globalAlpha = Math.max(0, this.life);
@@ -284,8 +448,13 @@ class FallingObject {
         const minX = playXStart + (playWidth - range) / 2;
         this.x = minX + Math.random() * range;
         this.y = -this.radius * 2;
+
+        // SLOW START: Gradual speed increase
+        const gameTime = (performance.now() - State.gameStartTime) / 1000;
+        const speedRamp = 0.6 + (gameTime * 0.02); // 60% at start, ramps up
         const baseSpeed = h * 0.004;
-        this.speed = (Math.random() * baseSpeed + baseSpeed) * speedMult;
+        this.speed = (Math.random() * baseSpeed + baseSpeed) * speedMult * speedRamp;
+
         this.color = type === 'gem' ? '#00f2ea' : (type === 'gold' ? '#FFD700' : '#ff0050');
     }
     update() { this.y += this.speed; }
@@ -297,95 +466,7 @@ class FallingObject {
     }
 }
 
-// === AUDIO ENGINE ===
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audioCtx, masterGain;
-
-function initAudio() {
-    try {
-        if (!audioCtx) audioCtx = new AudioCtx();
-        if (!masterGain) {
-            masterGain = audioCtx.createGain();
-            masterGain.connect(audioCtx.destination);
-            setVolume(State.volume);
-        }
-    } catch (e) {
-        console.warn("AudioContext init failed:", e);
-    }
-}
-
-function setVolume(value) {
-    try {
-        const parsedValue = parseFloat(value);
-        if (isNaN(parsedValue) || !isFinite(parsedValue)) {
-            State.volume = 0.5;
-            PlayerData.volume = 0.5;
-        } else {
-            State.volume = clamp(parsedValue, 0, 1);
-            PlayerData.volume = State.volume;
-        }
-        if (masterGain) masterGain.gain.value = State.volume;
-        savePlayerData(PlayerData);
-    } catch (e) {
-        console.warn("setVolume error:", e);
-    }
-}
-
-function playGemSound() {
-    try {
-        if (State.muted) return;
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        initAudio();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1600, audioCtx.currentTime + 0.05);
-        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-        osc.connect(gain); gain.connect(masterGain);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.2);
-    } catch (e) { console.warn("playGemSound error:", e); }
-}
-
-function playBombSound() {
-    try {
-        if (State.muted) return;
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        initAudio();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(120, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-        osc.connect(gain); gain.connect(masterGain);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.35);
-    } catch (e) { console.warn("playBombSound error:", e); }
-}
-
-function playGoldSound() {
-    try {
-        if (State.muted) return;
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        initAudio();
-        const notes = [523.25, 659.25, 783.99];
-        notes.forEach((freq, i) => {
-            setTimeout(() => {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-                osc.connect(gain); gain.connect(masterGain);
-                osc.start(); osc.stop(audioCtx.currentTime + 0.35);
-            }, i * 50);
-        });
-    } catch (e) { console.warn("playGoldSound error:", e); }
-}
-
+// === UTILITY FUNCTIONS ===
 function createExplosion(x, y, color) {
     for (let i = 0; i < 8; i++) State.particles.push(new Particle(x, y, color));
 }
@@ -456,11 +537,10 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 3000);
 }
 
-// === SETTINGS MODAL ===
+// === UI EVENTS ===
 window.openSettings = function () {
     if (D.settings) {
         D.settings.classList.remove('hidden');
-        // Disable other modals' pointer events
         if (D.menu) D.menu.style.pointerEvents = 'none';
         if (D.gameOver) D.gameOver.style.pointerEvents = 'none';
     }
@@ -469,29 +549,40 @@ window.openSettings = function () {
 window.closeSettings = function () {
     if (D.settings) {
         D.settings.classList.add('hidden');
-        // Re-enable pointer events
         if (D.menu) D.menu.style.pointerEvents = 'auto';
         if (D.gameOver) D.gameOver.style.pointerEvents = 'auto';
     }
 };
 
+// BACKDROP CLICK TO CLOSE
+if (D.settings) {
+    D.settings.addEventListener('click', (e) => {
+        if (e.target === D.settings) window.closeSettings();
+    });
+}
+
 // === SHOP SYSTEM ===
 function renderShop() {
     if (!D.shopItems) return;
     D.shopItems.innerHTML = '';
+
     SHOP_ITEMS.forEach(item => {
         const owned = PlayerData.inventory.includes(item.id);
         const equipped = PlayerData.equippedSkin === item.id;
+
         const div = document.createElement('div');
         div.className = 'shop-item';
         if (owned) div.classList.add('owned');
         if (equipped) div.classList.add('equipped');
+
         const preview = document.createElement('div');
         preview.className = 'shop-item-preview';
         preview.style.border = `2px solid ${item.color}`;
+
         const previewCanvas = document.createElement('canvas');
         previewCanvas.width = 40; previewCanvas.height = 40;
         const ctx = previewCanvas.getContext('2d');
+
         if (item.type === 'circle') {
             const radius = item.id === 'clown' ? 18 : 15;
             if (item.id === 'clown') {
@@ -515,19 +606,51 @@ function renderShop() {
             ctx.setLineDash([3, 3]); ctx.strokeRect(7, 7, 26, 26); ctx.setLineDash([]);
             ctx.beginPath(); ctx.moveTo(20, 10); ctx.lineTo(20, 30); ctx.moveTo(10, 20); ctx.lineTo(30, 20); ctx.stroke();
         }
+
         preview.appendChild(previewCanvas);
-        const name = document.createElement('div'); name.className = 'shop-item-name'; name.innerText = item.name;
-        const price = document.createElement('div'); price.className = 'shop-item-price'; price.innerText = item.price === 0 ? 'FREE' : `${item.price} 🪙`;
-        const bonus = document.createElement('div'); bonus.style.fontSize = '0.75rem'; bonus.style.color = '#00f2ea'; bonus.style.marginBottom = '5px'; bonus.innerText = `${item.hitboxMultiplier}x Reach`;
-        const btn = document.createElement('button'); btn.className = 'shop-item-btn';
-        if (equipped) {
-            btn.innerText = 'EQUIPPED'; btn.classList.add('equipped-btn'); btn.disabled = true;
-        } else if (owned) {
-            btn.innerText = 'EQUIP'; btn.onclick = () => equipSkin(item.id);
+
+        const name = document.createElement('div');
+        name.className = 'shop-item-name';
+        name.innerText = item.name;
+
+        const price = document.createElement('div');
+        price.className = 'shop-item-price';
+        price.innerText = item.price === 0 ? 'FREE' : `${item.price} 🪙`;
+
+        const bonus = document.createElement('div');
+        bonus.style.fontSize = '0.75rem';
+        bonus.style.color = '#00f2ea';
+        bonus.style.marginBottom = '5px';
+        if (item.ability === 'shield') {
+            bonus.innerText = `🛡️ ${item.description}`;
+        } else if (item.ability === 'multiplier') {
+            bonus.innerText = `⭐ ${item.description}`;
         } else {
-            btn.innerText = 'BUY'; btn.disabled = PlayerData.totalCoins < item.price; btn.onclick = () => buySkin(item.id, item.price);
+            bonus.innerText = `${item.hitboxMultiplier}x Reach`;
         }
-        div.appendChild(preview); div.appendChild(name); div.appendChild(bonus); div.appendChild(price); div.appendChild(btn);
+
+        const btn = document.createElement('button');
+        btn.className = 'shop-item-btn';
+
+        if (equipped) {
+            btn.innerText = 'EQUIPPED';
+            btn.classList.add('equipped-btn');
+            btn.disabled = true;
+        } else if (owned) {
+            btn.innerText = 'EQUIP';
+            btn.onclick = () => equipSkin(item.id);
+        } else {
+            btn.innerText = 'BUY';
+            btn.disabled = PlayerData.totalCoins < item.price;
+            btn.onclick = () => buySkin(item.id, item.price);
+        }
+
+        div.appendChild(preview);
+        div.appendChild(name);
+        div.appendChild(bonus);
+        div.appendChild(price);
+        div.appendChild(btn);
+
         D.shopItems.appendChild(div);
     });
 }
@@ -540,7 +663,7 @@ function buySkin(id, price) {
         updateCoinDisplay();
         renderShop();
         showToast(`Purchased! 🎉`);
-        playGoldSound();
+        AudioManager.playGold();
     }
 }
 
@@ -550,7 +673,7 @@ function equipSkin(id) {
     savePlayerData(PlayerData);
     renderShop();
     showToast(`Equipped! ✨`);
-    playGemSound();
+    AudioManager.playGem();
 }
 
 window.openShop = function () {
@@ -564,8 +687,11 @@ window.closeShop = function () {
     D.menu.classList.remove('hidden');
 };
 
-// === SMART START FLOW ===
+// === GAME FLOW ===
 window.startGame = function () {
+    // Initialize audio on first interaction
+    AudioManager.init();
+
     D.menu.classList.add('hidden');
     D.gameOver.classList.add('hidden');
     if (D.leaderboard) D.leaderboard.classList.add('hidden');
@@ -573,14 +699,12 @@ window.startGame = function () {
     if (D.settings) D.settings.classList.add('hidden');
     if (D.settingsBtn) D.settingsBtn.classList.add('hidden');
 
-    // SHOW DISTANCE CHECK OVERLAY
     if (D.distanceOverlay) D.distanceOverlay.classList.remove('hidden');
     State.waitingForIdealDistance = true;
     State.isDistanceIdeal = false;
     State.distanceHoldTime = 0;
     State.lastDistanceCheckTime = performance.now();
 
-    // Hide hold progress initially
     if (D.holdProgress) D.holdProgress.classList.add('hidden');
     if (D.progressRing) updateHoldProgress(0);
 
@@ -589,21 +713,26 @@ window.startGame = function () {
     State.combo = 0;
     State.isFeverMode = false;
     State.speedMultiplier = 1.0;
+    State.lastSpeedNotification = 0;
     State.bombChance = 0.35;
     State.fallingObjects = [];
     State.particles = [];
     State.isGameActive = false;
+    State.isCountingDown = false;
     State.nosePulse = 0;
     State.gameStartTime = 0;
+    State.scoreSaved = false;
 
     document.body.classList.remove('fever-mode');
     updateUI();
-}
+};
 
 function beginCountdown() {
     if (!D.overlay || !D.countText) return;
+    if (State.isCountingDown) return; // PREVENT DUPLICATES
 
-    // Hide distance overlay
+    State.isCountingDown = true;
+
     if (D.distanceOverlay) D.distanceOverlay.classList.add('hidden');
     D.scoreHud.classList.remove('hidden');
 
@@ -612,19 +741,24 @@ function beginCountdown() {
     let count = 3;
     D.countText.innerText = count;
 
-    const timer = setInterval(() => {
+    // Clear previous timer
+    if (State.countdownTimer) clearInterval(State.countdownTimer);
+
+    State.countdownTimer = setInterval(() => {
         count--;
         if (count > 0) {
             D.countText.innerText = count;
-            playGemSound();
+            AudioManager.playGem();
         } else if (count === 0) {
             D.countText.innerText = "GO!";
-            playGoldSound();
+            AudioManager.playGold();
         } else {
-            clearInterval(timer);
+            clearInterval(State.countdownTimer);
+            State.countdownTimer = null;
             D.overlay.style.display = 'none';
             State.isGameActive = true;
             State.waitingForIdealDistance = false;
+            State.isCountingDown = false;
             State.gameStartTime = performance.now();
             State.lastSpawnTime = performance.now();
             requestAnimationFrame(gameLoop);
@@ -639,24 +773,31 @@ function endGame() {
     document.body.classList.remove('fever-mode');
     showProximityWarning(false);
     if (D.settingsBtn) D.settingsBtn.classList.remove('hidden');
+
     PlayerData.totalCoins += State.score;
     savePlayerData(PlayerData);
     updateCoinDisplay();
+
     const finalScoreEl = document.getElementById('final-score');
     if (finalScoreEl) finalScoreEl.innerText = State.score;
+
     if (D.saveBtn) D.saveBtn.disabled = false;
     if (D.saveMsg) D.saveMsg.innerText = "";
     if (D.username) D.username.value = PlayerData.lastUsername || "";
-    playBombSound();
+
+    AudioManager.playBomb();
 }
 
 // === GAME LOOP ===
 function gameLoop() {
     if (!State.isGameActive) return;
+
     const ctx = D.canvas.getContext('2d');
     ctx.clearRect(0, 0, D.canvas.width, D.canvas.height);
+
     const noseXPx = State.lastKnownNose.x;
     const noseYPx = State.lastKnownNose.y;
+
     State.nosePulse += 0.05;
     const pulseScale = 1 + Math.sin(State.nosePulse) * 0.05;
 
@@ -695,17 +836,28 @@ function gameLoop() {
         ctx.translate(noseXPx, noseYPx); ctx.rotate(rotation); ctx.translate(-noseXPx, -noseYPx);
         ctx.strokeStyle = skinData.color; ctx.lineWidth = 3; ctx.shadowBlur = 20; ctx.shadowColor = skinData.color;
         ctx.setLineDash([5, 5]); ctx.strokeRect(noseXPx - 15, noseYPx - 15, 30, 30); ctx.setLineDash([]);
-        ctx.beginPath(); ctx.moveTo(noseXPx, noseYPx - 20); ctx.lineTo(noseXPx, noseYPx + 20);
-        ctx.moveTo(noseXPx - 20, noseYPx); ctx.lineTo(noseXPx + 20, noseYPx); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(noseXPx, noseYPx - 20); ctx.lineTo(noseXPx, noseYPx + 20);
+        ctx.moveTo(noseXPx - 20, noseYPx); ctx.lineTo(noseXPx + 20, noseYPx);
+        ctx.stroke();
         ctx.strokeRect(noseXPx - 18, noseYPx - 18, 5, 5); ctx.strokeRect(noseXPx + 13, noseYPx - 18, 5, 5);
         ctx.strokeRect(noseXPx - 18, noseYPx + 13, 5, 5); ctx.strokeRect(noseXPx + 13, noseYPx + 13, 5, 5);
     }
     ctx.restore();
 
+    // PROGRESSIVE DIFFICULTY (already has slow start in FallingObject constructor)
     const now = performance.now();
     const minutesPlayed = (now - State.gameStartTime) / 60000;
     const dynamicSpeedBonus = 1.0 + (minutesPlayed * 0.5) + (State.score * 0.002);
     State.speedMultiplier = dynamicSpeedBonus;
+
+    // SPEED UP NOTIFICATION
+    const speedTier = Math.floor(State.speedMultiplier * 2); // Every 0.5 increase
+    if (speedTier > State.lastSpeedNotification) {
+        State.lastSpeedNotification = speedTier;
+        createFloatingText("SPEED UP! ⚡", window.innerWidth / 2, 100);
+    }
+
     if (State.score >= 100) State.bombChance = 0.45;
 
     let safeWidthRatio = 1.0 - State.faceScale;
@@ -723,45 +875,62 @@ function gameLoop() {
         State.lastSpawnTime = now;
     }
 
-    const hitboxBonus = skinData.hitboxMultiplier;
+    // Hitbox with 0.8 multiplier to balance
+    const hitboxBonus = skinData.hitboxMultiplier * 0.8;
     const effectiveRadius = 15 * hitboxBonus;
 
     for (let i = State.fallingObjects.length - 1; i >= 0; i--) {
         const obj = State.fallingObjects[i];
         obj.update(); obj.draw(ctx);
+
         const dx = obj.x - noseXPx;
         const dy = obj.y - noseYPx;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < (obj.radius + effectiveRadius)) {
             State.fallingObjects.splice(i, 1);
+
             if (obj.type === 'gem') {
-                const points = State.isFeverMode ? 20 : 10;
+                let points = State.isFeverMode ? 20 : 10;
+                // GOLD ABILITY: 1.2x multiplier
+                if (skinData.ability === 'multiplier') points = Math.floor(points * 1.2);
+
                 State.score += points; State.combo++; updateFeverMode(); triggerVisualEffect('score');
-                createExplosion(obj.x, obj.y, '#00f2ea'); playGemSound();
+                createExplosion(obj.x, obj.y, '#00f2ea'); AudioManager.playGem();
                 if (State.combo === 5) createFloatingText("+25 COMBO!", obj.x, obj.y);
                 if (State.combo === 10) createFloatingText("+50 COMBO!", obj.x, obj.y);
                 if (State.combo === 15) createFloatingText("+100 EPIC!", obj.x, obj.y);
             } else if (obj.type === 'gold') {
-                State.score += 50; State.combo++; updateFeverMode(); triggerVisualEffect('score');
+                let points = 50;
+                if (skinData.ability === 'multiplier') points = Math.floor(points * 1.2);
+
+                State.score += points; State.combo++; updateFeverMode(); triggerVisualEffect('score');
                 createExplosion(obj.x, obj.y, '#FFD700');
-                createFloatingText("JACKPOT! +50", obj.x, obj.y, true);
-                playGoldSound();
+                createFloatingText(`JACKPOT! +${points}`, obj.x, obj.y, true);
+                AudioManager.playGold();
             } else {
-                State.lives--; State.combo = 0; State.isFeverMode = false;
-                document.body.classList.remove('fever-mode'); triggerVisualEffect('damage');
-                createExplosion(obj.x, obj.y, '#ff0050'); playBombSound();
+                // CLOWN ABILITY: 10% shield
+                if (skinData.ability === 'shield' && Math.random() < 0.1) {
+                    createFloatingText("🛡️ SHIELDED!", obj.x, obj.y);
+                    createExplosion(obj.x, obj.y, '#00f2ea');
+                    AudioManager.playGem();
+                } else {
+                    State.lives--; State.combo = 0; State.isFeverMode = false;
+                    document.body.classList.remove('fever-mode'); triggerVisualEffect('damage');
+                    createExplosion(obj.x, obj.y, '#ff0050'); AudioManager.playBomb();
+                }
             }
             updateUI();
             if (State.lives <= 0) { endGame(); return; }
             continue;
         }
 
-        if (obj.y > D.canvas.height + obj.radius) {
+        // GARBAGE COLLECTION: Remove off-screen objects
+        if (obj.y > D.canvas.height + obj.radius + 100) {
             if (obj.type === 'gem' || obj.type === 'gold') {
                 State.lives--; State.combo = 0; State.isFeverMode = false;
                 document.body.classList.remove('fever-mode'); triggerVisualEffect('damage');
-                playBombSound();
+                AudioManager.playBomb();
             }
             State.fallingObjects.splice(i, 1);
             updateUI();
@@ -769,6 +938,7 @@ function gameLoop() {
         }
     }
 
+    // GARBAGE COLLECTION: Remove dead particles
     for (let i = State.particles.length - 1; i >= 0; i--) {
         const p = State.particles[i];
         p.update(); p.draw(ctx);
@@ -797,8 +967,8 @@ function onResults(results) {
         const faceWidth = Math.abs(rightCheek.x - leftCheek.x);
         State.faceScale = faceWidth;
 
-        // PROXIMITY HOLD-TO-START LOGIC
-        const distanceStatus = checkDistance(faceWidth);
+        // PROXIMITY WITH CENTER CHECK
+        const distanceStatus = checkDistance(faceWidth, State.noseY);
 
         if (State.waitingForIdealDistance) {
             updateDistanceUI(distanceStatus);
@@ -808,25 +978,20 @@ function onResults(results) {
             State.lastDistanceCheckTime = now;
 
             if (distanceStatus === 'IDEAL') {
-                // Show hold progress
                 if (D.holdProgress) D.holdProgress.classList.remove('hidden');
-
                 State.distanceHoldTime += deltaTime;
                 const progress = Math.min(State.distanceHoldTime / DISTANCE.HOLD_DURATION, 1);
                 updateHoldProgress(progress);
 
-                // Start game when hold is complete
-                if (State.distanceHoldTime >= DISTANCE.HOLD_DURATION) {
+                if (State.distanceHoldTime >= DISTANCE.HOLD_DURATION && !State.isCountingDown) {
                     beginCountdown();
                 }
             } else {
-                // Reset hold timer if out of range
                 State.distanceHoldTime = 0;
                 updateHoldProgress(0);
                 if (D.holdProgress) D.holdProgress.classList.add('hidden');
             }
         } else if (State.isGameActive) {
-            // IN-GAME: Monitor distance and show warning
             if (distanceStatus !== 'IDEAL') showProximityWarning(true);
             else showProximityWarning(false);
         }
@@ -840,23 +1005,43 @@ async function initSystem() {
             video: { facingMode: 'user', width: 1280, height: 720 }, audio: false
         });
         D.video.srcObject = stream;
+
         faceMesh = new FaceMesh({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
         });
         faceMesh.setOptions({ maxNumFaces: 1, minDetectionConfidence: 0.5 });
         faceMesh.onResults(onResults);
+
         camera = new Camera(D.video, {
             onFrame: async () => { await faceMesh.send({ image: D.video }); }, width: 1280, height: 720
         });
         camera.start();
+
         window.addEventListener('resize', () => {
             D.canvas.width = window.innerWidth;
             D.canvas.height = window.innerHeight;
         });
     } catch (e) {
         console.error("Camera Error:", e);
-        alert("Camera access required!");
+        // CAMERA ERROR HANDLING
+        showCameraError();
     }
+}
+
+function showCameraError() {
+    const errorPanel = document.createElement('div');
+    errorPanel.className = 'glass-panel';
+    errorPanel.style.position = 'fixed';
+    errorPanel.style.top = '50%';
+    errorPanel.style.left = '50%';
+    errorPanel.style.transform = 'translate(-50%, -50%)';
+    errorPanel.style.zIndex = '10000';
+    errorPanel.innerHTML = `
+        <h2 style="color: #ff0050;">⚠️ Camera Required</h2>
+        <p>Please allow camera access and refresh the page.</p>
+        <button onclick="location.reload()" class="btn-primary">Reload Page</button>
+    `;
+    document.body.appendChild(errorPanel);
 }
 
 // === LEADERBOARD ===
@@ -914,6 +1099,7 @@ function saveSnapshot() {
 
 // === BINDINGS ===
 window.restartGame = window.startGame;
+
 window.goHome = () => {
     D.gameOver.classList.add('hidden');
     if (D.leaderboard) D.leaderboard.classList.add('hidden');
@@ -926,11 +1112,12 @@ window.goHome = () => {
     document.body.classList.remove('fever-mode');
     if (D.settingsBtn) D.settingsBtn.classList.remove('hidden');
     State.waitingForIdealDistance = false;
+    State.isCountingDown = false;
+    if (State.countdownTimer) clearInterval(State.countdownTimer);
 };
 
 if (D.settingsBtn) {
     D.settingsBtn.onclick = window.openSettings;
-    // Rotating gear animation on click
     D.settingsBtn.addEventListener('click', () => {
         D.settingsBtn.style.transform = 'rotate(90deg)';
         setTimeout(() => D.settingsBtn.style.transform = 'rotate(0deg)', 300);
@@ -938,43 +1125,54 @@ if (D.settingsBtn) {
 }
 
 if (D.volumeSlider) {
-    D.volumeSlider.value = State.volume * 100;
-    // Update slider background fill
-    D.volumeSlider.style.setProperty('--value', (State.volume * 100) + '%');
+    D.volumeSlider.value = AudioManager.volume * 100;
+    D.volumeSlider.style.setProperty('--value', (AudioManager.volume * 100) + '%');
     D.volumeSlider.oninput = (e) => {
         const value = e.target.value;
-        setVolume(value / 100);
+        AudioManager.setVolume(value / 100);
+        PlayerData.volume = AudioManager.volume;
+        savePlayerData(PlayerData);
         e.target.style.setProperty('--value', value + '%');
         if (D.volumePercentage) D.volumePercentage.innerText = value + '%';
     };
 }
 
 if (D.muteToggle) {
-    D.muteToggle.checked = !State.muted;
-    D.muteToggle.onchange = (e) => State.muted = !e.target.checked;
+    D.muteToggle.checked = !AudioManager.muted;
+    D.muteToggle.onchange = (e) => {
+        AudioManager.muted = !e.target.checked;
+    };
 }
 
 if (D.shopBtn) D.shopBtn.onclick = window.openShop;
 if (D.leaderboardBtn) D.leaderboardBtn.onclick = window.openLeaderboard;
 if (D.snapshotBtn) D.snapshotBtn.onclick = saveSnapshot;
+
 if (D.saveBtn) {
     D.saveBtn.onclick = async () => {
+        if (State.scoreSaved) return; // PREVENT DUPLICATE SAVES
         if (!db) { showToast("Database offline!"); return; }
+
         const name = D.username.value.trim() || 'Anonymous';
         PlayerData.lastUsername = name;
         savePlayerData(PlayerData);
+
         D.saveBtn.innerText = "SAVING...";
         D.saveBtn.disabled = true;
+
         try {
             await addDoc(collection(db, 'scores'), { name: name, score: State.score, date: new Date() });
             D.saveMsg.innerText = "SAVED!";
             D.saveMsg.style.color = "#00f2ea";
+            D.saveBtn.innerText = "SAVED";
+            State.scoreSaved = true;
             showToast("Score saved! 🎉");
         } catch (e) {
             console.error("Save Error:", e);
             D.saveMsg.innerText = "ERROR";
             D.saveMsg.style.color = "#ff0050";
             D.saveBtn.disabled = false;
+            D.saveBtn.innerText = "SAVE SCORE";
         }
     };
 }
@@ -985,12 +1183,16 @@ if (D.shareBtn) {
         if (navigator.share) {
             try { await navigator.share(shareData); } catch (err) { console.log('Share cancelled'); }
         } else {
-            try { await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`); showToast("Link copied! 📋"); }
-            catch (err) { showToast("Share failed"); }
+            try {
+                await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+                showToast("Link copied! 📋");
+            } catch (err) {
+                showToast("Share failed");
+            }
         }
     };
 }
 
 updateCoinDisplay();
 initSystem();
-console.log("✓ v1.1.1 READY - Hold-to-Start Active, Settings Polished");
+console.log("✓ v1.1.2 READY - Ultra-Comprehensive, Production Quality");

@@ -1,4 +1,4 @@
-/* v1.1.1 CRITICAL FIXES & POLISH - style.css */
+/* v1.1.2 ULTRA-COMPREHENSIVE FIXES - style.css */
 
 :root {
     --cyan: #00f2ea;
@@ -18,18 +18,22 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-/* 1. BASE & REALITY LAYER */
+/* MOBILE-FIRST: PORTRAIT ORIENTATION */
 body,
 html {
     width: 100vw;
     height: 100dvh;
+    /* Dynamic viewport height */
     background: transparent !important;
     overflow: hidden;
     color: white;
     font-family: var(--font);
     touch-action: none;
+    /* Prevent zoom/scroll */
     overscroll-behavior: none;
     -webkit-overflow-scrolling: auto;
+    user-select: none;
+    /* Prevent text selection */
 }
 
 body {
@@ -84,7 +88,7 @@ body.fever-mode {
     transition: background 0.2s;
 }
 
-/* 2. UI LAYER */
+/* UI LAYER */
 #ui-layer {
     position: fixed;
     inset: 0;
@@ -95,7 +99,7 @@ body.fever-mode {
     pointer-events: none;
 }
 
-/* 3. HOLO-GLASS PANELS */
+/* GLASS PANELS */
 .glass-panel {
     pointer-events: auto;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
@@ -147,7 +151,7 @@ body.fever-mode .glass-panel {
     }
 }
 
-/* 4. TYPOGRAPHY */
+/* TYPOGRAPHY */
 .title {
     font-size: 3.5rem;
     font-weight: 900;
@@ -192,13 +196,16 @@ h3 {
     filter: drop-shadow(0 0 15px rgba(0, 242, 234, 0.4));
 }
 
-/* 5. BUTTONS */
+/* BUTTONS (THUMB ZONE OPTIMIZED) */
 button {
     font-family: var(--font);
     cursor: pointer;
     user-select: none;
     pointer-events: auto;
     transition: all 0.2s;
+    min-height: 44px;
+    min-width: 44px;
+    /* Touch-friendly */
 }
 
 button:active {
@@ -247,7 +254,7 @@ button:active {
     font-weight: 600;
 }
 
-/* 6. HUD ELEMENTS */
+/* HUD ELEMENTS */
 .hud-icon-btn {
     position: fixed;
     top: 20px;
@@ -272,7 +279,6 @@ button:active {
     border-color: var(--cyan);
     box-shadow: 0 0 20px rgba(0, 242, 234, 0.3);
     transform: rotate(90deg);
-    /* Rotating gear */
 }
 
 #score-hud {
@@ -319,12 +325,11 @@ body.fever-mode #score-val {
     letter-spacing: 1px;
 }
 
-/* 7. PROXIMITY SYSTEM (LIGHTER BACKGROUND) */
+/* PROXIMITY SYSTEM */
 #distance-check-overlay {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.3);
-    /* LIGHTER from 0.9 */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -372,7 +377,6 @@ body.fever-mode #score-val {
     text-align: center;
 }
 
-/* HOLD PROGRESS INDICATOR */
 #hold-progress {
     margin-top: 40px;
     display: flex;
@@ -429,7 +433,7 @@ body.fever-mode #score-val {
     }
 }
 
-/* 8. SETTINGS MODAL (POPOVER STYLE) */
+/* SETTINGS MODAL (POPOVER) */
 #settings-modal {
     position: fixed;
     top: 70px;
@@ -452,7 +456,7 @@ body.fever-mode #score-val {
     }
 }
 
-/* Mobile: Bottom Sheet */
+/* MOBILE: Bottom Sheet */
 @media (max-width: 480px) {
     #settings-modal {
         top: auto;
@@ -501,7 +505,6 @@ body.fever-mode #score-val {
     min-width: 40px;
 }
 
-/* ENHANCED SLIDER WITH FILL */
 .styled-slider {
     width: 150px;
     height: 6px;
@@ -586,7 +589,7 @@ input:checked+.toggle-slider:before {
     transform: translateX(24px);
 }
 
-/* 9. LEADERBOARD & SHOP */
+/* LEADERBOARD */
 .leaderboard-list {
     max-height: 300px;
     overflow-y: auto;
@@ -631,7 +634,122 @@ input:checked+.toggle-slider:before {
     color: var(--bronze);
 }
 
-/* 10. OVERLAYS */
+/* SHOP SYSTEM (ENHANCED VISUAL CLARITY) */
+.shop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+    max-height: 400px;
+    overflow-y: auto;
+    -ms-overflow-style: none;
+    /* IE/Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+/* HIDE SCROLLBAR */
+.shop-grid::-webkit-scrollbar {
+    display: none;
+}
+
+.shop item {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 15px;
+    text-align: center;
+    transition: all 0.3s;
+    opacity: 0.7;
+    /* Dim unowned items */
+}
+
+.shop-item:hover {
+    border-color: var(--cyan);
+    background: rgba(0, 242, 234, 0.05);
+    opacity: 1;
+}
+
+.shop-item.owned {
+    border-color: var(--gold);
+    background: rgba(255, 215, 0, 0.05);
+    opacity: 1;
+}
+
+.shop-item.equipped {
+    border: 2px solid var(--cyan);
+    /* Thicker border */
+    background: rgba(0, 242, 234, 0.1);
+    box-shadow: 0 0 20px rgba(0, 242, 234, 0.5);
+    /* Bright glow */
+    opacity: 1;
+}
+
+.shop-item-preview {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.shop-item-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+}
+
+.shop-item-price {
+    color: var(--gold);
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+}
+
+.shop-item-btn {
+    background: var(--cyan);
+    color: #000;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.2s;
+}
+
+.shop-item-btn:disabled {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.3);
+    cursor: not-allowed;
+}
+
+.shop-item-btn.equipped-btn {
+    background: rgba(0, 242, 234, 0.2);
+    color: var(--cyan);
+    border: 1px solid var(--cyan);
+}
+
+.coin-display {
+    background: rgba(255, 215, 0, 0.1);
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    border-radius: 50px;
+    padding: 12px 24px;
+    margin: 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--gold);
+}
+
+/* OVERLAYS */
 .hidden {
     display: none !important;
 }
@@ -662,7 +780,7 @@ input:checked+.toggle-slider:before {
     }
 }
 
-/* 11. INPUTS */
+/* INPUTS */
 input[type="text"] {
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border);
@@ -708,7 +826,7 @@ input[type="text"]:focus {
     color: var(--cyan);
 }
 
-/* 12. JUICY EFFECTS */
+/* EFFECTS */
 @keyframes damageFlash {
     0% {
         box-shadow: inset 0 0 0 0 transparent;
@@ -808,106 +926,7 @@ input[type="text"]:focus {
     }
 }
 
-/* 13. ECONOMY SYSTEM */
-.coin-display {
-    background: rgba(255, 215, 0, 0.1);
-    border: 1px solid rgba(255, 215, 0, 0.3);
-    border-radius: 50px;
-    padding: 12px 24px;
-    margin: 20px 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    font-size: 1.2rem;
-    font-weight: 800;
-    color: var(--gold);
-}
-
-.shop-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 15px;
-    margin: 20px 0;
-    max-height: 400px;
-    overflow-y: auto;
-}
-
-.shop-item {
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    padding: 15px;
-    text-align: center;
-    transition: all 0.3s;
-}
-
-.shop-item:hover {
-    border-color: var(--cyan);
-    background: rgba(0, 242, 234, 0.05);
-}
-
-.shop-item.owned {
-    border-color: var(--gold);
-    background: rgba(255, 215, 0, 0.05);
-}
-
-.shop-item.equipped {
-    border-color: var(--cyan);
-    background: rgba(0, 242, 234, 0.1);
-    box-shadow: 0 0 20px rgba(0, 242, 234, 0.3);
-}
-
-.shop-item-preview {
-    width: 60px;
-    height: 60px;
-    margin: 0 auto 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-}
-
-.shop-item-name {
-    font-weight: 700;
-    font-size: 0.9rem;
-    margin-bottom: 5px;
-}
-
-.shop-item-price {
-    color: var(--gold);
-    font-size: 0.85rem;
-    margin-bottom: 10px;
-}
-
-.shop-item-btn {
-    background: var(--cyan);
-    color: #000;
-    border: none;
-    border-radius: 20px;
-    padding: 8px 16px;
-    font-weight: 700;
-    font-size: 0.8rem;
-    cursor: pointer;
-    width: 100%;
-    transition: all 0.2s;
-}
-
-.shop-item-btn:disabled {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.3);
-    cursor: not-allowed;
-}
-
-.shop-item-btn.equipped-btn {
-    background: rgba(0, 242, 234, 0.2);
-    color: var(--cyan);
-    border: 1px solid var(--cyan);
-}
-
-/* 14. RESPONSIVE */
+/* RESPONSIVE (MOBILE-FIRST) */
 @media (max-width: 480px) {
     .title {
         font-size: 2.5rem;
