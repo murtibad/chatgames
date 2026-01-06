@@ -1,4 +1,4 @@
-/* v1.1.2 ULTRA-COMPREHENSIVE FIXES - style.css */
+/* v1.1.3 UX POLISH & ANTI-CHEAT - style.css */
 
 :root {
     --cyan: #00f2ea;
@@ -18,22 +18,19 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-/* MOBILE-FIRST: PORTRAIT ORIENTATION */
+/* BASE & REALITY LAYER */
 body,
 html {
     width: 100vw;
     height: 100dvh;
-    /* Dynamic viewport height */
     background: transparent !important;
     overflow: hidden;
     color: white;
     font-family: var(--font);
     touch-action: none;
-    /* Prevent zoom/scroll */
     overscroll-behavior: none;
     -webkit-overflow-scrolling: auto;
     user-select: none;
-    /* Prevent text selection */
 }
 
 body {
@@ -99,12 +96,13 @@ body.fever-mode {
     pointer-events: none;
 }
 
-/* GLASS PANELS */
+/* GLASS PANELS (IMPROVED READABILITY) */
 .glass-panel {
     pointer-events: auto;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08));
+    backdrop-filter: blur(30px) saturate(180%);
+    /* Increased blur */
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
     border: 1px solid var(--border);
     border-radius: 32px;
     padding: 40px 30px;
@@ -112,8 +110,9 @@ body.fever-mode {
     max-width: 400px;
     text-align: center;
     box-shadow:
-        inset 0 0 20px rgba(255, 255, 255, 0.05),
-        0 20px 50px rgba(0, 0, 0, 0.5);
+        inset 0 0 20px rgba(255, 255, 255, 0.08),
+        0 20px 50px rgba(0, 0, 0, 0.7);
+    /* Stronger shadow */
     animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     transition: border-color 0.3s;
 }
@@ -128,8 +127,8 @@ body.fever-mode .glass-panel {
     0%,
     100% {
         box-shadow:
-            inset 0 0 20px rgba(255, 255, 255, 0.05),
-            0 20px 50px rgba(0, 0, 0, 0.5);
+            inset 0 0 20px rgba(255, 255, 255, 0.08),
+            0 20px 50px rgba(0, 0, 0, 0.7);
     }
 
     50% {
@@ -174,6 +173,8 @@ h2 {
     font-size: 2rem;
     margin-bottom: 20px;
     color: var(--cyan);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    /* Better readability */
 }
 
 h3 {
@@ -196,7 +197,7 @@ h3 {
     filter: drop-shadow(0 0 15px rgba(0, 242, 234, 0.4));
 }
 
-/* BUTTONS (THUMB ZONE OPTIMIZED) */
+/* BUTTONS */
 button {
     font-family: var(--font);
     cursor: pointer;
@@ -205,7 +206,6 @@ button {
     transition: all 0.2s;
     min-height: 44px;
     min-width: 44px;
-    /* Touch-friendly */
 }
 
 button:active {
@@ -433,7 +433,43 @@ body.fever-mode #score-val {
     }
 }
 
-/* SETTINGS MODAL (POPOVER) */
+/* DANGER ZONE (BOMB RAIN) */
+#danger-zone {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 0, 0, 0.15);
+    border: 3px solid #ff0050;
+    color: #ff0050;
+    padding: 25px 50px;
+    border-radius: 15px;
+    font-size: 2rem;
+    font-weight: 900;
+    z-index: 499;
+    text-shadow: 0 0 10px #ff0050;
+    box-shadow: 0 0 50px rgba(255, 0, 80, 0.8);
+    animation: dangerPulse 0.5s infinite;
+    pointer-events: none;
+}
+
+@keyframes dangerPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+        border-color: #ff0050;
+    }
+
+    50% {
+        opacity: 0.7;
+        transform: translate(-50%, -50%) scale(1.05);
+        border-color: #ff6060;
+    }
+}
+
+/* SETTINGS MODAL */
 #settings-modal {
     position: fixed;
     top: 70px;
@@ -456,7 +492,6 @@ body.fever-mode #score-val {
     }
 }
 
-/* MOBILE: Bottom Sheet */
 @media (max-width: 480px) {
     #settings-modal {
         top: auto;
@@ -513,7 +548,11 @@ body.fever-mode #score-val {
     background: linear-gradient(to right, var(--cyan) 0%, var(--cyan) var(--value, 100%), #444 var(--value, 100%), #444 100%);
     border-radius: 3px;
     outline: none;
-    transition: background 0.1s;
+    transition: background 0.1s, opacity 0.3s;
+}
+
+.styled-slider:disabled {
+    cursor: not-allowed;
 }
 
 .styled-slider::-webkit-slider-thumb {
@@ -634,7 +673,7 @@ input:checked+.toggle-slider:before {
     color: var(--bronze);
 }
 
-/* SHOP SYSTEM (ENHANCED VISUAL CLARITY) */
+/* SHOP SYSTEM */
 .shop-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -643,17 +682,14 @@ input:checked+.toggle-slider:before {
     max-height: 400px;
     overflow-y: auto;
     -ms-overflow-style: none;
-    /* IE/Edge */
     scrollbar-width: none;
-    /* Firefox */
 }
 
-/* HIDE SCROLLBAR */
 .shop-grid::-webkit-scrollbar {
     display: none;
 }
 
-.shop item {
+.shop-item {
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
@@ -661,7 +697,6 @@ input:checked+.toggle-slider:before {
     text-align: center;
     transition: all 0.3s;
     opacity: 0.7;
-    /* Dim unowned items */
 }
 
 .shop-item:hover {
@@ -678,10 +713,8 @@ input:checked+.toggle-slider:before {
 
 .shop-item.equipped {
     border: 2px solid var(--cyan);
-    /* Thicker border */
     background: rgba(0, 242, 234, 0.1);
     box-shadow: 0 0 20px rgba(0, 242, 234, 0.5);
-    /* Bright glow */
     opacity: 1;
 }
 
@@ -806,8 +839,10 @@ input[type="text"]:focus {
     margin-top: 10px;
 }
 
+/* IMPROVED READABILITY: Result Box */
 .result-box {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.5);
+    /* Darker background */
     border-radius: 15px;
     padding: 20px;
     margin: 20px 0;
@@ -815,15 +850,18 @@ input[type="text"]:focus {
 
 .result-box .label {
     font-size: 0.8rem;
-    opacity: 0.7;
+    opacity: 0.8;
     display: block;
     margin-bottom: 5px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 #final-score {
     font-size: 3rem;
     font-weight: 900;
     color: var(--cyan);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    /* Better contrast */
 }
 
 /* EFFECTS */
@@ -926,7 +964,7 @@ input[type="text"]:focus {
     }
 }
 
-/* RESPONSIVE (MOBILE-FIRST) */
+/* RESPONSIVE */
 @media (max-width: 480px) {
     .title {
         font-size: 2.5rem;
@@ -955,5 +993,10 @@ input[type="text"]:focus {
 
     #distance-message {
         font-size: 1.5rem;
+    }
+
+    #danger-zone {
+        font-size: 1.5rem;
+        padding: 20px 35px;
     }
 }

@@ -1,8 +1,6 @@
-// v1.1.2 ULTRA-COMPREHENSIVE FIXES - app.js
+// v1.1.3 UX POLISH & ANTI-CHEAT - app.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-console.log("🚀 v1.1.2 ULTRA-COMPREHENSIVE FIXES");
 
 // === FIREBASE CONFIG ===
 const CONFIG = {
@@ -18,9 +16,8 @@ let db;
 try {
     const app = initializeApp(CONFIG);
     db = getFirestore(app);
-    console.log("✓ Firebase Connected");
 } catch (e) {
-    console.warn("Firebase Offline:", e);
+    console.error("Firebase initialization failed:", e);
 }
 
 // === AUDIO SYSTEM ===
@@ -43,32 +40,13 @@ const AudioManager = {
                 this.masterGain.gain.value = this.volume;
             }
         } catch (e) {
-            console.warn("AudioManager init failed:", e);
+            console.error("AudioManager init failed:", e);
         }
     },
 
     setVolume(value) {
         this.volume = clamp(parseFloat(value) || 0.5, 0, 1);
         if (this.masterGain) this.masterGain.gain.value = this.volume;
-    },
-
-    playTone(freq, duration, type = 'sine') {
-        if (!this.ctx || this.muted) return;
-        try {
-            this.init();
-            const osc = this.ctx.createOscillator();
-            const gain = this.ctx.createGain();
-            osc.type = type;
-            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-            gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-            osc.connect(gain);
-            gain.connect(this.masterGain);
-            osc.start();
-            osc.stop(this.ctx.currentTime + duration);
-        } catch (e) {
-            console.warn("playTone error:", e);
-        }
     },
 
     playGem() {
@@ -82,10 +60,8 @@ const AudioManager = {
             osc.frequency.exponentialRampToValueAtTime(1600, this.ctx.currentTime + 0.05);
             gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
-            osc.connect(gain);
-            gain.connect(this.masterGain);
-            osc.start();
-            osc.stop(this.ctx.currentTime + 0.2);
+            osc.connect(gain); gain.connect(this.masterGain);
+            osc.start(); osc.stop(this.ctx.currentTime + 0.2);
         } catch (e) { }
     },
 
@@ -100,10 +76,8 @@ const AudioManager = {
             osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.2);
             gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
-            osc.connect(gain);
-            gain.connect(this.masterGain);
-            osc.start();
-            osc.stop(this.ctx.currentTime + 0.35);
+            osc.connect(gain); gain.connect(this.masterGain);
+            osc.start(); osc.stop(this.ctx.currentTime + 0.35);
         } catch (e) { }
     },
 
@@ -120,10 +94,8 @@ const AudioManager = {
                     osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
                     gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
                     gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
-                    osc.connect(gain);
-                    gain.connect(this.masterGain);
-                    osc.start();
-                    osc.stop(this.ctx.currentTime + 0.35);
+                    osc.connect(gain); gain.connect(this.masterGain);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.35);
                 }, i * 50);
             });
         } catch (e) { }
@@ -136,7 +108,8 @@ const DISTANCE = {
     TOO_CLOSE: 0.45,
     TOO_HIGH: 0.3,
     TOO_LOW: 0.7,
-    HOLD_DURATION: 1500
+    HOLD_DURATION: 1500,
+    PENALTY_THRESHOLD: 2000 // 2 seconds in warning = penalty
 };
 
 const MAX_PLAY_WIDTH = 600;
@@ -159,7 +132,7 @@ function loadPlayerData() {
         const data = localStorage.getItem(STORAGE_KEY);
         if (data) return JSON.parse(data);
     } catch (e) {
-        console.warn("localStorage load error:", e);
+        console.error("localStorage load error:", e);
     }
     return {
         totalCoins: 0,
@@ -180,48 +153,12 @@ function savePlayerData(data) {
 
 const PlayerData = loadPlayerData();
 
-// === SHOP ITEMS (WITH SPECIAL ABILITIES) ===
+// === SHOP ITEMS ===
 const SHOP_ITEMS = [
-    {
-        id: 'default',
-        name: 'Neon Dot',
-        price: 0,
-        color: '#00f2ea',
-        type: 'circle',
-        hitboxMultiplier: 1.0,
-        ability: null,
-        description: 'Classic cyan glow'
-    },
-    {
-        id: 'clown',
-        name: 'Clown Nose',
-        price: 500,
-        color: '#ff0050',
-        type: 'circle',
-        hitboxMultiplier: 1.3, // Reduced from 1.5
-        ability: 'shield', // 10% chance to destroy bomb
-        description: '10% bomb shield'
-    },
-    {
-        id: 'cyborg',
-        name: 'Cyborg',
-        price: 1000,
-        color: '#00ff00',
-        type: 'square',
-        hitboxMultiplier: 1.6, // Reduced from 2.0
-        ability: null,
-        description: 'Tech precision'
-    },
-    {
-        id: 'gold',
-        name: 'Golden Touch',
-        price: 2000,
-        color: '#FFD700',
-        type: 'circle',
-        hitboxMultiplier: 2.0, // Reduced from 2.5
-        ability: 'multiplier', // 1.2x score
-        description: '1.2x score boost'
-    }
+    { id: 'default', name: 'Neon Dot', price: 0, color: '#00f2ea', type: 'circle', hitboxMultiplier: 1.0, ability: null, description: 'Classic cyan glow' },
+    { id: 'clown', name: 'Clown Nose', price: 500, color: '#ff0050', type: 'circle', hitboxMultiplier: 1.3, ability: 'shield', description: '10% bomb shield' },
+    { id: 'cyborg', name: 'Cyborg', price: 1000, color: '#00ff00', type: 'square', hitboxMultiplier: 1.6, ability: null, description: 'Tech precision' },
+    { id: 'gold', name: 'Golden Touch', price: 2000, color: '#FFD700', type: 'circle', hitboxMultiplier: 2.0, ability: 'multiplier', description: '1.2x score boost' }
 ];
 
 // === PRE-RENDERED SPRITES ===
@@ -231,12 +168,10 @@ const bombSprite = document.createElement('canvas');
 const spriteSize = 128;
 
 function preRenderDiamond() {
-    diamondSprite.width = spriteSize;
-    diamondSprite.height = spriteSize;
+    diamondSprite.width = spriteSize; diamondSprite.height = spriteSize;
     const ctx = diamondSprite.getContext('2d');
     const cx = spriteSize / 2, cy = spriteSize / 2, size = spriteSize / 5;
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = "rgba(0, 255, 255, 0.8)";
+    ctx.shadowBlur = 20; ctx.shadowColor = "rgba(0, 255, 255, 0.8)";
     ctx.beginPath();
     ctx.moveTo(cx, cy - size); ctx.lineTo(cx + size, cy); ctx.lineTo(cx, cy + size); ctx.lineTo(cx - size, cy); ctx.closePath();
     const gradient = ctx.createRadialGradient(cx, cy - 5, 0, cx, cy, size);
@@ -246,12 +181,10 @@ function preRenderDiamond() {
 }
 
 function preRenderGoldDiamond() {
-    goldDiamondSprite.width = spriteSize;
-    goldDiamondSprite.height = spriteSize;
+    goldDiamondSprite.width = spriteSize; goldDiamondSprite.height = spriteSize;
     const ctx = goldDiamondSprite.getContext('2d');
     const cx = spriteSize / 2, cy = spriteSize / 2, size = spriteSize / 5;
-    ctx.shadowBlur = 30;
-    ctx.shadowColor = "rgba(255, 215, 0, 1.0)";
+    ctx.shadowBlur = 30; ctx.shadowColor = "rgba(255, 215, 0, 1.0)";
     ctx.beginPath();
     ctx.moveTo(cx, cy - size); ctx.lineTo(cx + size, cy); ctx.lineTo(cx, cy + size); ctx.lineTo(cx - size, cy); ctx.closePath();
     const gradient = ctx.createRadialGradient(cx, cy - 5, 0, cx, cy, size);
@@ -261,18 +194,15 @@ function preRenderGoldDiamond() {
 }
 
 function preRenderBomb() {
-    bombSprite.width = spriteSize;
-    bombSprite.height = spriteSize;
+    bombSprite.width = spriteSize; bombSprite.height = spriteSize;
     const ctx = bombSprite.getContext('2d');
     const cx = spriteSize / 2, cy = spriteSize / 2, radius = spriteSize / 6;
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = "rgba(255, 0, 80, 0.8)";
+    ctx.shadowBlur = 20; ctx.shadowColor = "rgba(255, 0, 80, 0.8)";
     const gradient = ctx.createRadialGradient(cx - 5, cy - 5, 0, cx, cy, radius);
     gradient.addColorStop(0, "#FF6B9D"); gradient.addColorStop(1, "#C9184A");
     ctx.fillStyle = gradient;
     ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "#333"; ctx.lineWidth = 3;
+    ctx.shadowBlur = 0; ctx.strokeStyle = "#333"; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(cx, cy - radius); ctx.lineTo(cx, cy - radius - 10); ctx.stroke();
     ctx.fillStyle = "#FFD700";
     ctx.beginPath(); ctx.arc(cx, cy - radius - 12, 3, 0, Math.PI * 2); ctx.fill();
@@ -308,6 +238,7 @@ const D = {
     holdProgress: getEl('hold-progress'),
     progressRing: getEl('progress-ring'),
     proximityWarning: getEl('proximity-warning'),
+    dangerZone: getEl('danger-zone'),
     username: getEl('username-input'),
     saveMsg: getEl('save-msg'),
     saveBtn: getEl('btn-save'),
@@ -327,14 +258,14 @@ const D = {
 // === GAME STATE ===
 const State = {
     isGameActive: false,
-    isCountingDown: false, // NEW: Prevent duplicate countdowns
-    countdownTimer: null, // NEW: Track countdown interval
+    isCountingDown: false,
+    countdownTimer: null,
     score: 0,
     lives: 3,
     combo: 0,
     isFeverMode: false,
     speedMultiplier: 1.0,
-    lastSpeedNotification: 0, // NEW: Track speed up notifications
+    lastSpeedNotification: 0,
     bombChance: 0.35,
     lastSpawnTime: 0,
     spawnInterval: 1200,
@@ -352,23 +283,22 @@ const State = {
     isDistanceIdeal: false,
     distanceHoldTime: 0,
     lastDistanceCheckTime: 0,
-    scoreSaved: false // NEW: Prevent duplicate saves
+    scoreSaved: false,
+    // ANTI-CHEAT: Bomb Rain
+    warningTime: 0,
+    isPenaltyMode: false,
+    lastPenaltyCheck: 0
 };
 
-// Sync audio state
 AudioManager.muted = false;
 AudioManager.volume = PlayerData.volume;
 
 // === PROXIMITY SYSTEM ===
 function checkDistance(faceWidth, noseY) {
-    // Check vertical position
     if (noseY < DISTANCE.TOO_HIGH) return 'TOO_HIGH';
     if (noseY > DISTANCE.TOO_LOW) return 'TOO_LOW';
-
-    // Check horizontal distance
     if (faceWidth < DISTANCE.TOO_FAR) return 'TOO_FAR';
     if (faceWidth > DISTANCE.TOO_CLOSE) return 'TOO_CLOSE';
-
     return 'IDEAL';
 }
 
@@ -388,15 +318,11 @@ function updateDistanceUI(status) {
         frame.classList.add('warning');
         State.isDistanceIdeal = false;
 
-        if (status === 'TOO_FAR') {
-            D.distanceMessage.innerText = '🔭 Move Closer';
-        } else if (status === 'TOO_CLOSE') {
-            D.distanceMessage.innerText = '✋ Move Back';
-        } else if (status === 'TOO_HIGH') {
-            D.distanceMessage.innerText = '🔽 Move Down';
-        } else if (status === 'TOO_LOW') {
-            D.distanceMessage.innerText = '🔼 Move Up';
-        }
+        if (status === 'TOO_FAR') D.distanceMessage.innerText = '🔭 Move Closer';
+        else if (status === 'TOO_CLOSE') D.distanceMessage.innerText = '✋ Move Back';
+        else if (status === 'TOO_HIGH') D.distanceMessage.innerText = '🔽 Move Down';
+        else if (status === 'TOO_LOW') D.distanceMessage.innerText = '🔼 Move Up';
+
         D.distanceMessage.style.color = '#ff0050';
     }
 }
@@ -414,6 +340,12 @@ function showProximityWarning(show) {
     else D.proximityWarning.classList.add('hidden');
 }
 
+function showDangerZone(show) {
+    if (!D.dangerZone) return;
+    if (show) D.dangerZone.classList.remove('hidden');
+    else D.dangerZone.classList.add('hidden');
+}
+
 // === CLASSES ===
 class Particle {
     constructor(x, y, color) {
@@ -425,10 +357,8 @@ class Particle {
         this.decay = Math.random() * 0.05 + 0.02;
     }
     update() {
-        this.x += this.speedX;
-        this.y += this.speedY;
-        this.life -= this.decay;
-        this.size *= 0.95;
+        this.x += this.speedX; this.y += this.speedY;
+        this.life -= this.decay; this.size *= 0.95;
     }
     draw(ctx) {
         ctx.save();
@@ -449,9 +379,8 @@ class FallingObject {
         this.x = minX + Math.random() * range;
         this.y = -this.radius * 2;
 
-        // SLOW START: Gradual speed increase
         const gameTime = (performance.now() - State.gameStartTime) / 1000;
-        const speedRamp = 0.6 + (gameTime * 0.02); // 60% at start, ramps up
+        const speedRamp = 0.6 + (gameTime * 0.02);
         const baseSpeed = h * 0.004;
         this.speed = (Math.random() * baseSpeed + baseSpeed) * speedMult * speedRamp;
 
@@ -486,7 +415,7 @@ function updateUI() {
     if (D.livesDisplay) {
         D.livesDisplay.innerHTML = '';
         for (let i = 0; i < 3; i++) {
-            D.livesDisplay.innerHTML += i < State.lives ? '❤️' : '🖤';
+            D.livesDisplay.innerHTML += i < State.lives ? '❤' : '🖤';
         }
     }
     updateCoinDisplay();
@@ -554,7 +483,7 @@ window.closeSettings = function () {
     }
 };
 
-// BACKDROP CLICK TO CLOSE
+// BACKDROP CLICK
 if (D.settings) {
     D.settings.addEventListener('click', (e) => {
         if (e.target === D.settings) window.closeSettings();
@@ -645,12 +574,7 @@ function renderShop() {
             btn.onclick = () => buySkin(item.id, item.price);
         }
 
-        div.appendChild(preview);
-        div.appendChild(name);
-        div.appendChild(bonus);
-        div.appendChild(price);
-        div.appendChild(btn);
-
+        div.appendChild(preview); div.appendChild(name); div.appendChild(bonus); div.appendChild(price); div.appendChild(btn);
         D.shopItems.appendChild(div);
     });
 }
@@ -689,7 +613,6 @@ window.closeShop = function () {
 
 // === GAME FLOW ===
 window.startGame = function () {
-    // Initialize audio on first interaction
     AudioManager.init();
 
     D.menu.classList.add('hidden');
@@ -722,6 +645,9 @@ window.startGame = function () {
     State.nosePulse = 0;
     State.gameStartTime = 0;
     State.scoreSaved = false;
+    State.warningTime = 0;
+    State.isPenaltyMode = false;
+    State.lastPenaltyCheck = 0;
 
     document.body.classList.remove('fever-mode');
     updateUI();
@@ -729,7 +655,7 @@ window.startGame = function () {
 
 function beginCountdown() {
     if (!D.overlay || !D.countText) return;
-    if (State.isCountingDown) return; // PREVENT DUPLICATES
+    if (State.isCountingDown) return;
 
     State.isCountingDown = true;
 
@@ -741,7 +667,6 @@ function beginCountdown() {
     let count = 3;
     D.countText.innerText = count;
 
-    // Clear previous timer
     if (State.countdownTimer) clearInterval(State.countdownTimer);
 
     State.countdownTimer = setInterval(() => {
@@ -761,6 +686,7 @@ function beginCountdown() {
             State.isCountingDown = false;
             State.gameStartTime = performance.now();
             State.lastSpawnTime = performance.now();
+            State.lastPenaltyCheck = performance.now();
             requestAnimationFrame(gameLoop);
         }
     }, 1000);
@@ -772,6 +698,7 @@ function endGame() {
     D.gameOver.classList.remove('hidden');
     document.body.classList.remove('fever-mode');
     showProximityWarning(false);
+    showDangerZone(false);
     if (D.settingsBtn) D.settingsBtn.classList.remove('hidden');
 
     PlayerData.totalCoins += State.score;
@@ -845,14 +772,12 @@ function gameLoop() {
     }
     ctx.restore();
 
-    // PROGRESSIVE DIFFICULTY (already has slow start in FallingObject constructor)
     const now = performance.now();
     const minutesPlayed = (now - State.gameStartTime) / 60000;
     const dynamicSpeedBonus = 1.0 + (minutesPlayed * 0.5) + (State.score * 0.002);
     State.speedMultiplier = dynamicSpeedBonus;
 
-    // SPEED UP NOTIFICATION
-    const speedTier = Math.floor(State.speedMultiplier * 2); // Every 0.5 increase
+    const speedTier = Math.floor(State.speedMultiplier * 2);
     if (speedTier > State.lastSpeedNotification) {
         State.lastSpeedNotification = speedTier;
         createFloatingText("SPEED UP! ⚡", window.innerWidth / 2, 100);
@@ -864,18 +789,27 @@ function gameLoop() {
     if (safeWidthRatio < 0.4) safeWidthRatio = 0.4;
     if (safeWidthRatio > 0.95) safeWidthRatio = 0.95;
 
-    const currentInterval = State.spawnInterval / State.speedMultiplier;
-    if (now - State.lastSpawnTime > currentInterval) {
+    // BOMB RAIN: Penalty mode spawn rate
+    let effectiveInterval = State.spawnInterval / State.speedMultiplier;
+    if (State.isPenaltyMode) {
+        effectiveInterval = effectiveInterval / 3; // 3x faster spawns
+    }
+
+    if (now - State.lastSpawnTime > effectiveInterval) {
         let type = 'gem';
         const rand = Math.random();
+
+        // BOMB RAIN: Increase bomb chance in penalty mode
+        const bombThreshold = State.isPenaltyMode ? 0.70 : 0.35; // 70% bombs vs 35%
+
         if (rand < 0.05) type = 'gold';
-        else if (rand < 0.35) type = 'bomb';
+        else if (rand < bombThreshold) type = 'bomb';
+
         const obj = new FallingObject(D.canvas.width, D.canvas.height, type, State.speedMultiplier, safeWidthRatio);
         State.fallingObjects.push(obj);
         State.lastSpawnTime = now;
     }
 
-    // Hitbox with 0.8 multiplier to balance
     const hitboxBonus = skinData.hitboxMultiplier * 0.8;
     const effectiveRadius = 15 * hitboxBonus;
 
@@ -892,7 +826,6 @@ function gameLoop() {
 
             if (obj.type === 'gem') {
                 let points = State.isFeverMode ? 20 : 10;
-                // GOLD ABILITY: 1.2x multiplier
                 if (skinData.ability === 'multiplier') points = Math.floor(points * 1.2);
 
                 State.score += points; State.combo++; updateFeverMode(); triggerVisualEffect('score');
@@ -909,7 +842,6 @@ function gameLoop() {
                 createFloatingText(`JACKPOT! +${points}`, obj.x, obj.y, true);
                 AudioManager.playGold();
             } else {
-                // CLOWN ABILITY: 10% shield
                 if (skinData.ability === 'shield' && Math.random() < 0.1) {
                     createFloatingText("🛡️ SHIELDED!", obj.x, obj.y);
                     createExplosion(obj.x, obj.y, '#00f2ea');
@@ -925,7 +857,6 @@ function gameLoop() {
             continue;
         }
 
-        // GARBAGE COLLECTION: Remove off-screen objects
         if (obj.y > D.canvas.height + obj.radius + 100) {
             if (obj.type === 'gem' || obj.type === 'gold') {
                 State.lives--; State.combo = 0; State.isFeverMode = false;
@@ -938,7 +869,6 @@ function gameLoop() {
         }
     }
 
-    // GARBAGE COLLECTION: Remove dead particles
     for (let i = State.particles.length - 1; i >= 0; i--) {
         const p = State.particles[i];
         p.update(); p.draw(ctx);
@@ -967,7 +897,6 @@ function onResults(results) {
         const faceWidth = Math.abs(rightCheek.x - leftCheek.x);
         State.faceScale = faceWidth;
 
-        // PROXIMITY WITH CENTER CHECK
         const distanceStatus = checkDistance(faceWidth, State.noseY);
 
         if (State.waitingForIdealDistance) {
@@ -992,8 +921,28 @@ function onResults(results) {
                 if (D.holdProgress) D.holdProgress.classList.add('hidden');
             }
         } else if (State.isGameActive) {
-            if (distanceStatus !== 'IDEAL') showProximityWarning(true);
-            else showProximityWarning(false);
+            const now = performance.now();
+
+            // ANTI-CHEAT: Track warning time
+            if (distanceStatus !== 'IDEAL') {
+                State.warningTime += (now - State.lastPenaltyCheck);
+                showProximityWarning(true);
+
+                // PENALTY MODE: 2s in warning = bomb rain
+                if (State.warningTime >= DISTANCE.PENALTY_THRESHOLD && !State.isPenaltyMode) {
+                    State.isPenaltyMode = true;
+                    showDangerZone(true);
+                }
+            } else {
+                State.warningTime = 0;
+                if (State.isPenaltyMode) {
+                    State.isPenaltyMode = false;
+                    showDangerZone(false);
+                }
+                showProximityWarning(false);
+            }
+
+            State.lastPenaltyCheck = now;
         }
     }
 }
@@ -1023,7 +972,6 @@ async function initSystem() {
         });
     } catch (e) {
         console.error("Camera Error:", e);
-        // CAMERA ERROR HANDLING
         showCameraError();
     }
 }
@@ -1108,6 +1056,7 @@ window.goHome = () => {
     if (D.distanceOverlay) D.distanceOverlay.classList.add('hidden');
     if (D.holdProgress) D.holdProgress.classList.add('hidden');
     showProximityWarning(false);
+    showDangerZone(false);
     D.menu.classList.remove('hidden');
     document.body.classList.remove('fever-mode');
     if (D.settingsBtn) D.settingsBtn.classList.remove('hidden');
@@ -1117,16 +1066,22 @@ window.goHome = () => {
 };
 
 if (D.settingsBtn) {
-    D.settingsBtn.onclick = window.openSettings;
-    D.settingsBtn.addEventListener('click', () => {
+    D.settingsBtn.onclick = () => {
+        if (D.settings.classList.contains('hidden')) {
+            window.openSettings();
+        } else {
+            window.closeSettings();
+        }
         D.settingsBtn.style.transform = 'rotate(90deg)';
         setTimeout(() => D.settingsBtn.style.transform = 'rotate(0deg)', 300);
-    });
+    };
 }
 
 if (D.volumeSlider) {
     D.volumeSlider.value = AudioManager.volume * 100;
     D.volumeSlider.style.setProperty('--value', (AudioManager.volume * 100) + '%');
+
+    // SMART SLIDER: Auto-enable sound when dragging
     D.volumeSlider.oninput = (e) => {
         const value = e.target.value;
         AudioManager.setVolume(value / 100);
@@ -1134,13 +1089,30 @@ if (D.volumeSlider) {
         savePlayerData(PlayerData);
         e.target.style.setProperty('--value', value + '%');
         if (D.volumePercentage) D.volumePercentage.innerText = value + '%';
+
+        // Auto-enable sound if user drags slider
+        if (AudioManager.muted) {
+            AudioManager.muted = false;
+            if (D.muteToggle) D.muteToggle.checked = true;
+        }
     };
+
+    // Update disabled state based on mute toggle
+    function updateSliderState() {
+        D.volumeSlider.disabled = AudioManager.muted;
+        D.volumeSlider.style.opacity = AudioManager.muted ? '0.5' : '1';
+    }
+    updateSliderState();
 }
 
 if (D.muteToggle) {
     D.muteToggle.checked = !AudioManager.muted;
     D.muteToggle.onchange = (e) => {
         AudioManager.muted = !e.target.checked;
+        if (D.volumeSlider) {
+            D.volumeSlider.disabled = AudioManager.muted;
+            D.volumeSlider.style.opacity = AudioManager.muted ? '0.5' : '1';
+        }
     };
 }
 
@@ -1150,7 +1122,7 @@ if (D.snapshotBtn) D.snapshotBtn.onclick = saveSnapshot;
 
 if (D.saveBtn) {
     D.saveBtn.onclick = async () => {
-        if (State.scoreSaved) return; // PREVENT DUPLICATE SAVES
+        if (State.scoreSaved) return;
         if (!db) { showToast("Database offline!"); return; }
 
         const name = D.username.value.trim() || 'Anonymous';
@@ -1195,4 +1167,3 @@ if (D.shareBtn) {
 
 updateCoinDisplay();
 initSystem();
-console.log("✓ v1.1.2 READY - Ultra-Comprehensive, Production Quality");

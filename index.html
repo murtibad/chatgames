@@ -83,9 +83,8 @@
             <div id="save-msg"></div>
 
             <div class="action-row">
-                <button id="btn-share" class="btn-secondary">🔗 Share</button>
-                <button onclick="window.restartGame()" class="btn-secondary">🔄
-                    Restart</button>
+                <button onclick="window.restartGame()" class="btn-primary" style="flex: 1;">🔄 Restart</button>
+                <button id="btn-share" class="btn-secondary" style="flex: 1;">🔗 Share</button>
             </div>
             <button id="btn-snapshot" class="btn-secondary">📸 Save Photo</button>
             <button onclick="window.goHome()" class="btn-text">Back to Home</button>
@@ -154,6 +153,11 @@
     <!-- PROXIMITY WARNING (In-Game) -->
     <div id="proximity-warning" class="hidden">
         <i class="fa-solid fa-triangle-exclamation"></i> Maintain Distance!
+    </div>
+
+    <!-- DANGER ZONE (Penalty Mode) -->
+    <div id="danger-zone" class="hidden">
+        ⚠️ DANGER ZONE
     </div>
 
     <!-- COUNTDOWN OVERLAY -->
