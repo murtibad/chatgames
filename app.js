@@ -109,7 +109,8 @@ const DISTANCE = {
     TOO_HIGH: 0.3,
     TOO_LOW: 0.7,
     HOLD_DURATION: 1500,
-    PENALTY_THRESHOLD: 2000 // 2 seconds in warning = penalty
+    PENALTY_THRESHOLD: 2000,
+    HYSTERESIS_BUFFER: 0.1 // 10% buffer zone for warnings
 };
 
 const MAX_PLAY_WIDTH = 600;
@@ -122,6 +123,11 @@ function getPlayArea() {
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+}
+
+// Lerp (Linear Interpolation) for smooth transitions
+function lerp(start, end, factor) {
+    return start + (end - start) * factor;
 }
 
 // === LOCALSTORAGE ===
@@ -287,21 +293,47 @@ const State = {
     distanceHoldTime: 0,
     lastDistanceCheckTime: 0,
     scoreSaved: false,
-    // ANTI-CHEAT: Bomb Rain
     warningTime: 0,
     isPenaltyMode: false,
-    lastPenaltyCheck: 0
+    lastPenaltyCheck: 0,
+    // SMOOTHING: Lerp positions
+    smoothNoseX: 0.5,
+    smoothNoseY: 0.5,
+    smoothFaceScale: 0.1,
+    // HYSTERESIS: Warning state tracking
+    isInWarningZone: false,
+    lastWarningChange: 0
 };
 
 AudioManager.muted = false;
 AudioManager.volume = PlayerData.volume;
 
-// === PROXIMITY SYSTEM ===
+// === PROXIMITY SYSTEM WITH HYSTERESIS ===
 function checkDistance(faceWidth, noseY) {
+    const buffer = DISTANCE.HYSTERESIS_BUFFER;
+
+    // Y-axis checks
     if (noseY < DISTANCE.TOO_HIGH) return 'TOO_HIGH';
     if (noseY > DISTANCE.TOO_LOW) return 'TOO_LOW';
+
+    // HYSTERESIS LOGIC: Different thresholds for entering vs exiting warning zone
+    if (State.isInWarningZone) {
+        // EXITING warning zone requires moving further into safe zone
+        if (faceWidth >= DISTANCE.TOO_FAR + buffer &&
+            faceWidth <= DISTANCE.TOO_CLOSE - buffer) {
+            return 'IDEAL';
+        }
+    } else {
+        // ENTERING warning zone uses standard thresholds
+        if (faceWidth >= DISTANCE.TOO_FAR &&
+            faceWidth <= DISTANCE.TOO_CLOSE) {
+            return 'IDEAL';
+        }
+    }
+
     if (faceWidth < DISTANCE.TOO_FAR) return 'TOO_FAR';
     if (faceWidth > DISTANCE.TOO_CLOSE) return 'TOO_CLOSE';
+
     return 'IDEAL';
 }
 
@@ -920,14 +952,23 @@ function onResults(results) {
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         const landmarks = results.multiFaceLandmarks[0];
         const nose = landmarks[4];
-        State.noseX = nose.x; State.noseY = nose.y;
+
+        // LERP SMOOTHING: Smooth position transitions (factor 0.2 = 20% per frame)
+        State.smoothNoseX = lerp(State.smoothNoseX, nose.x, 0.2);
+        State.smoothNoseY = lerp(State.smoothNoseY, nose.y, 0.2);
+
+        State.noseX = State.smoothNoseX;
+        State.noseY = State.smoothNoseY;
         State.lastKnownNose.x = State.noseX * D.canvas.width;
         State.lastKnownNose.y = State.noseY * D.canvas.height;
 
         const leftCheek = landmarks[234];
         const rightCheek = landmarks[454];
         const faceWidth = Math.abs(rightCheek.x - leftCheek.x);
-        State.faceScale = faceWidth;
+
+        // LERP SMOOTHING: Smooth face scale
+        State.smoothFaceScale = lerp(State.smoothFaceScale, faceWidth, 0.2);
+        State.faceScale = State.smoothFaceScale;
 
         const distanceStatus = checkDistance(faceWidth, State.noseY);
 
@@ -955,8 +996,19 @@ function onResults(results) {
         } else if (State.isGameActive) {
             const now = performance.now();
 
+            // HYSTERESIS STATE TRACKING with DEBOUNCING (200ms)
+            const wasInWarningZone = State.isInWarningZone;
+            const shouldBeInWarning = (distanceStatus !== 'IDEAL');
+
+            // Debounce: Only change warning state if 200ms has passed
+            if (shouldBeInWarning !== wasInWarningZone &&
+                now - State.lastWarningChange > 200) {
+                State.isInWarningZone = shouldBeInWarning;
+                State.lastWarningChange = now;
+            }
+
             // ANTI-CHEAT: Track warning time
-            if (distanceStatus !== 'IDEAL') {
+            if (State.isInWarningZone) {
                 State.warningTime += (now - State.lastPenaltyCheck);
                 showProximityWarning(true);
 
@@ -964,14 +1016,14 @@ function onResults(results) {
                 if (State.warningTime >= DISTANCE.PENALTY_THRESHOLD && !State.isPenaltyMode) {
                     State.isPenaltyMode = true;
                     showDangerZone(true);
-                    showPenaltyNotification(true); // Show explanation
+                    showPenaltyNotification(true);
                 }
             } else {
                 State.warningTime = 0;
                 if (State.isPenaltyMode) {
                     State.isPenaltyMode = false;
                     showDangerZone(false);
-                    showPenaltyNotification(false); // Hide explanation
+                    showPenaltyNotification(false);
                 }
                 showProximityWarning(false);
             }
@@ -984,8 +1036,13 @@ function onResults(results) {
 let faceMesh, camera;
 async function initSystem() {
     try {
+        // MOBILE OPTIMIZATION: Lower resolution for mobile devices
+        const isMobile = window.innerWidth < 768;
+        const videoWidth = isMobile ? 720 : 1280;
+        const videoHeight = isMobile ? 480 : 720;
+
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user', width: 1280, height: 720 }, audio: false
+            video: { facingMode: 'user', width: videoWidth, height: videoHeight }, audio: false
         });
         D.video.srcObject = stream;
 
